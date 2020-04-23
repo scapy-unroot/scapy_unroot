@@ -106,16 +106,18 @@ class UnrootDaemon:
         return pid
 
     def __del__(self):
-        if self.pidfile and os.path.exists(self.pidfile):
+        if hasattr(self, "pidfile") and self.pidfile and \
+           os.path.exists(self.pidfile):
             os.remove(self.pidfile)
-            self.pidfile = None
-        for client in self.clients:
-            if "supersocket" in self.clients[client]:
-                self.clients[client]["supersocket"].close()
-            client.close()
-        if self.socket:
+        if hasattr(self, "clients"):
+            for client in self.clients:
+                if "supersocket" in self.clients[client]:
+                    self.clients[client]["supersocket"].close()
+                client.close()
+        if hasattr(self, "socket") and self.socket:
             self.socket.close()
-        if self.socketname and os.path.exists(self.socketname):
+        if hasattr(self, "socketname") and self.socketname and \
+           os.path.exists(self.socketname):
             os.unlink(self.socketname)
 
     def _eval_data(self, data, socket):

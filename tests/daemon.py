@@ -16,6 +16,7 @@ import os
 import sys
 import tempfile
 import socket
+import time
 import threading
 import unittest
 import unittest.mock
@@ -317,12 +318,21 @@ class TestRunDaemonThreaded(TestRunDaemonBase):
             if self.stop:
                 raise self.Stop()
             res = self._orig_select(*args, **kwargs)
+            self.last_res = res
             return res
         return _select
 
-    def wait_for_next_select(self, timeout=None):
+    def _wait_for_next_select(self, timeout=None):
         res = self.select_called.wait(timeout)
         self.select_called.clear()
+        return res
+
+    def wait_for_next_select(self, timeout=None):
+        start = time.time()
+        res = self._wait_for_next_select(timeout)
+        while res and not self.last_res:
+            timeout -= (time.time() - start)
+            res = self._wait_for_next_select(timeout)
         return res
 
     def stop_daemon(self):
@@ -348,6 +358,7 @@ class TestRunDaemonThreaded(TestRunDaemonBase):
                 return
 
         self.stop = False
+        self.last_res = None, None
         self.select_called = threading.Event()
         self.stopped = threading.Event()
         self.daemon_thread = threading.Thread(target=_run)

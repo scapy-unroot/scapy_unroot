@@ -193,6 +193,7 @@ class TestRunDaemonized(TestRunDaemonBase):
         dup2.assert_called()
         # run loop was started
         select.assert_called()
+        self.assertTrue(os.path.exists(self.daemon.pidfile))
         with open(self.daemon.pidfile) as f:
             self.assertEqual(getpid.return_value, int(f.read()))
 

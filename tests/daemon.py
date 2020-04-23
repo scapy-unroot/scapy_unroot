@@ -403,11 +403,12 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 sock.recv(MTU)
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
-    def test_init_l2socket_no_args(self, L2socket):
+    def test_init_l2socket__no_args(self, L2socket):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(self.daemon.socketname)
             self.assertTrue(self.wait_for_next_select(1))
-            sock.send(b'{"op":"init","type":"L2socket"}')
+            sock.send(json.dumps({"op": "init",
+                                  "type": "L2socket"}).encode())
             self.assertTrue(self.wait_for_next_select(1))
             sock.settimeout(0.3)
             res = json.loads(sock.recv(MTU))

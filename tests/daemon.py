@@ -248,9 +248,9 @@ class TestRunDaemonized(TestRunDaemonBase):
 
     @unittest.mock.patch('os.fork',
                          side_effect=[OSError(249, "test"), 0])
-    def test_success__first_fork_fail(self, fork, stdout, stderr, exit,
-                                      select, socket, umask, setsid, chown,
-                                      chmod, chdir, getpid, dup2, getgrnam):
+    def test_first_fork_fail(self, fork, stdout, stderr, exit, select, socket,
+                             umask, setsid, chown, chmod, chdir, getpid, dup2,
+                             getgrnam):
         self.assertTrue(self.daemon.daemonize)
         self.assertIsNone(self.daemon.pidfile)
         with self.assertRaises(InterruptedError):
@@ -276,9 +276,8 @@ class TestRunDaemonized(TestRunDaemonBase):
 
     @unittest.mock.patch('os.fork',
                          side_effect=[0, OSError(72, "testing")])
-    def test_success__second_fork_fail(self, fork, stdout, stderr, exit,
-                                       select, socket, umask, setsid, chown,
-                                       chmod, chdir, getpid, dup2, getgrnam):
+    def test_second_fork_fail(self, fork, stdout, stderr, exit, select, socket,
+                              umask, setsid, chown, chmod, chdir, getpid, dup2, getgrnam):
         self.assertTrue(self.daemon.daemonize)
         self.assertIsNone(self.daemon.pidfile)
         with self.assertRaises(InterruptedError):

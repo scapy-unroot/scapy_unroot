@@ -28,7 +28,6 @@ from scapy.layers import all as layers
 RUN_DIR_DEFAULT = "/var/run/scapy-unroot"
 
 
-NOT_DECODEABLE = 0
 UNKNOWN_OP = 1
 UNKNOWN_TYPE = 2
 UNINITILIZED = 3
@@ -226,14 +225,13 @@ class UnrootDaemon:
                     try:
                         try:
                             # MTU plus extra for JSON data
-                            data = json.loads(sock.recv(MTU + 128))
+                            b = sock.recv(MTU + 128)
+                            if len(b) == 0:
+                                continue
+                            data = json.loads(b)
                             res = self._eval_data(data, self.clients[sock])
-                        except json.decoder.JSONDecodeError as e:
-                            res = {
-                                "error": {
-                                    "type": NOT_DECODEABLE, "msg": str(e),
-                                },
-                            }
+                        except json.decoder.JSONDecodeError:
+                            continue
                         if "closed" in res:
                             try:
                                 del read_sockets[

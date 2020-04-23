@@ -11,7 +11,9 @@
 Tests for the daemon to enable using scapy without root.
 """
 
+import io
 import os
+import sys
 import tempfile
 import unittest
 import unittest.mock
@@ -109,3 +111,34 @@ class TestRunDaemonSetup(TestRunDaemonBase):
         makedirs.assert_called_once_with(self.run_dir.name)
         self._assert_socket_correct(chown, chmod)
         select.assert_called()
+
+
+@unittest.mock.patch('scapy.all.SuperSocket.select',
+                     side_effect=InterruptedError)
+@unittest.mock.patch('os.chmod')
+@unittest.mock.patch('os.chown')
+@unittest.mock.patch('os.unlink')
+@unittest.mock.patch('socket.socket')
+@unittest.mock.patch('os.path.exists', return_value=True)
+@unittest.mock.patch('grp.getgrnam')
+class TestRunFunction(unittest.TestCase):
+    @unittest.mock.patch.object(sys, 'argv', ["run", "group"])
+    def test_success(self, getgrnam, path_exists, socket, unlink, chown, chmod,
+                     select):
+        with self.assertRaises(InterruptedError):
+            scapy_unroot.daemon.run()
+        getgrnam.assert_called_with("group")
+        select.assert_called()
+
+    @unittest.mock.patch.object(sys, 'argv', ["run"])
+    @unittest.mock.patch('sys.stderr', new_callable=io.StringIO)
+    @unittest.mock.patch('sys.exit', side_effect=InterruptedError)
+    def test_group_none(self, exit, stderr, getgrnam, path_exists, socket,
+                        unlink, chown, chmod, select):
+        with self.assertRaises(InterruptedError):
+            scapy_unroot.daemon.run()
+        exit.assert_called()
+        self.assertEqual(1, len(exit.call_args.args))
+        self.assertNotEqual(0, exit.call_args.args[0])
+        getgrnam.assert_not_called()
+        select.assert_not_called()

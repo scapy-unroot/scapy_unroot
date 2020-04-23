@@ -11,6 +11,7 @@
 Tests for the daemon to enable using scapy without root.
 """
 
+import errno
 import io
 import json
 import os
@@ -414,3 +415,22 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             res = json.loads(sock.recv(MTU))
             self.assertIn("success", res)
             L2socket.assert_called_once_with()
+
+    @unittest.mock.patch("scapy.config.conf.L2socket")
+    def test_init_l2socket__blacklisted_iface(self, L2socket):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L2socket",
+                "args": {"iface": self.blacklist[0]},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(errno.EPERM, res["error"]["errno"])
+            self.assertEqual(os.strerror(errno.EPERM), res["error"]["msg"])
+            L2socket.assert_not_called()

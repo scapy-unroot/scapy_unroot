@@ -58,12 +58,14 @@ class TestInitDaemon(unittest.TestCase):
 
 
 class TestRunDaemonBase(unittest.TestCase):
+    daemonize = False
+
     @unittest.mock.patch('grp.getgrnam')
     def setUp(self, *args):
         self.run_dir = tempfile.TemporaryDirectory()
         self.assertTrue(os.path.exists(self.run_dir.name))
         self.daemon = scapy_unroot.daemon.UnrootDaemon(
-            "group", run_dir=self.run_dir.name
+            "group", run_dir=self.run_dir.name, daemonize=self.daemonize
         )
 
     def tearDown(self):
@@ -145,5 +147,147 @@ class TestRunFunction(unittest.TestCase):
         self.assertNotEqual(unittest.mock.call(0), exit.call_args)
         # constructor was not called
         getgrnam.assert_not_called()
+        # run loop was not started
+        select.assert_not_called()
+
+
+class FileNoStringIO(io.StringIO):
+    def fileno(self):
+        return 1
+
+
+@unittest.mock.patch('grp.getgrnam')
+@unittest.mock.patch('os.dup2')
+@unittest.mock.patch('os.getpid', return_value=16195)
+@unittest.mock.patch('os.chdir')
+@unittest.mock.patch('os.chmod')
+@unittest.mock.patch('os.chown')
+@unittest.mock.patch('os.setsid')
+@unittest.mock.patch('os.umask')
+@unittest.mock.patch('socket.socket')
+@unittest.mock.patch('scapy.all.SuperSocket.select',
+                     side_effect=InterruptedError)
+@unittest.mock.patch('sys.exit', side_effect=InterruptedError)
+@unittest.mock.patch('sys.stderr', new_callable=FileNoStringIO)
+@unittest.mock.patch('sys.stdout', new_callable=FileNoStringIO)
+class TestRunDaemonized(TestRunDaemonBase):
+    daemonize = True
+
+    @unittest.mock.patch('os.fork', return_value=0)
+    def test_success__both_forked(self, fork, stdout, stderr, exit, select,
+                                  socket, umask, setsid, chown, chmod, chdir,
+                                  getpid, dup2, getgrnam):
+        self.assertTrue(self.daemon.daemonize)
+        self.assertIsNone(self.daemon.pidfile)
+        with self.assertRaises(InterruptedError):
+            self.daemon.run()
+        fork.assert_has_calls([unittest.mock.call(), unittest.mock.call()])
+        exit.assert_not_called()
+        umask.assert_called_once_with(0)
+        setsid.assert_called_once()
+        chdir.assert_called_once_with("/")
+        getpid.assert_called_once()
+        # pidfile is now set
+        self.assertEqual(os.path.join(self.run_dir.name, "pidfile"),
+                         self.daemon.pidfile)
+        dup2.assert_called()
+        # run loop was started
+        select.assert_called()
+        with open(self.daemon.pidfile) as f:
+            self.assertEqual(getpid.return_value, int(f.read()))
+
+    @unittest.mock.patch('os.fork', return_value=17273)
+    def test_success__first_parent(self, fork, stdout, stderr, exit, select,
+                                   socket, umask, setsid, chown, chmod,
+                                   chdir, getpid, dup2, getgrnam):
+        self.assertTrue(self.daemon.daemonize)
+        self.assertIsNone(self.daemon.pidfile)
+        with self.assertRaises(InterruptedError):
+            self.daemon.run()
+        fork.assert_called_once()
+        exit.assert_any_call(0)
+        umask.assert_not_called()
+        setsid.assert_not_called()
+        chdir.assert_not_called()
+        # getpid gets called somewhere
+        # but pidfile stays unset
+        self.assertIsNone(self.daemon.pidfile)
+        dup2.assert_not_called()
+        # run loop was not started
+        select.assert_not_called()
+
+    @unittest.mock.patch('os.fork', side_effect=[0, 33211])
+    def test_success__second_parent(self, fork, stdout, stderr, exit, select,
+                                    socket, umask, setsid, chown, chmod, chdir,
+                                    getpid, dup2, getgrnam):
+        self.assertTrue(self.daemon.daemonize)
+        self.assertIsNone(self.daemon.pidfile)
+        with self.assertRaises(InterruptedError):
+            self.daemon.run()
+        fork.assert_has_calls([unittest.mock.call(), unittest.mock.call()])
+        exit.assert_any_call(0)
+        umask.assert_called_once_with(0)
+        setsid.assert_called_once()
+        chdir.assert_called_once_with("/")
+        # getpid gets called somewhere
+        # but pidfile stays unset
+        self.assertIsNone(self.daemon.pidfile)
+        dup2.assert_not_called()
+        # run loop was not started
+        select.assert_not_called()
+
+    @unittest.mock.patch('os.fork',
+                         side_effect=[OSError(249, "test"), 0])
+    def test_success__first_fork_fail(self, fork, stdout, stderr, exit,
+                                      select, socket, umask, setsid, chown,
+                                      chmod, chdir, getpid, dup2, getgrnam):
+        self.assertTrue(self.daemon.daemonize)
+        self.assertIsNone(self.daemon.pidfile)
+        with self.assertRaises(InterruptedError):
+            with self.assertLogs('scapy_unroot.daemon', level='ERROR') as cm:
+
+                self.daemon.run()
+        # check if log error was printed correctly
+        self.assertIn("ERROR:scapy_unroot.daemon.UnrootDaemon:"
+                      "fork #1 failed: 249 (test)", cm.output)
+        fork.assert_called_once()
+        exit.assert_called()
+        # sys.exit was never called with 0
+        self.assertNotIn(unittest.mock.call(0), exit.call_args)
+        umask.assert_not_called()
+        setsid.assert_not_called()
+        chdir.assert_not_called()
+        # getpid gets called somewhere
+        # but pidfile stays unset
+        self.assertIsNone(self.daemon.pidfile)
+        dup2.assert_not_called()
+        # run loop was not started
+        select.assert_not_called()
+
+    @unittest.mock.patch('os.fork',
+                         side_effect=[0, OSError(72, "testing")])
+    def test_success__second_fork_fail(self, fork, stdout, stderr, exit,
+                                       select, socket, umask, setsid, chown,
+                                       chmod, chdir, getpid, dup2, getgrnam):
+        self.assertTrue(self.daemon.daemonize)
+        self.assertIsNone(self.daemon.pidfile)
+        with self.assertRaises(InterruptedError):
+            with self.assertLogs('scapy_unroot.daemon', level='ERROR') as cm:
+
+                self.daemon.run()
+        # check if log error was printed correctly
+        self.assertIn("ERROR:scapy_unroot.daemon.UnrootDaemon:"
+                      "fork #2 failed: 72 (testing)", cm.output)
+        fork.assert_has_calls([unittest.mock.call(), unittest.mock.call()])
+        exit.assert_called()
+        # sys.exit was never called with 0
+        self.assertNotIn(unittest.mock.call(0), exit.call_args)
+        umask.assert_called_once_with(0)
+        setsid.assert_called_once()
+        chdir.assert_called_once_with("/")
+        # getpid gets called somewhere
+        # but pidfile stays unset
+        self.assertIsNone(self.daemon.pidfile)
+        dup2.assert_not_called()
         # run loop was not started
         select.assert_not_called()

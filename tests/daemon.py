@@ -12,6 +12,7 @@ Tests for the daemon to enable using scapy without root.
 """
 
 import os
+import tempfile
 import unittest
 import unittest.mock
 
@@ -53,47 +54,58 @@ class TestInitDaemon(unittest.TestCase):
         d = scapy_unroot.daemon.UnrootDaemon("group", interface_blacklist=None)
         self.assertEqual([], d.iface_blacklist)
 
+
+class TestRunDaemonBase(unittest.TestCase):
+    @unittest.mock.patch('grp.getgrnam')
+    def setUp(self, *args):
+        self.run_dir = tempfile.TemporaryDirectory()
+        self.assertTrue(os.path.exists(self.run_dir.name))
+        self.daemon = scapy_unroot.daemon.UnrootDaemon(
+            "group", run_dir=self.run_dir.name
+        )
+
+    def tearDown(self):
+        self.run_dir.cleanup()
+
+    def _assert_socket_correct(self, chown, chmod):
+        self.assertIsNotNone(self.daemon.socket)
+        chown.assert_called_once_with(self.daemon.socketname, 0o660)
+        chmod.assert_called_once_with(self.daemon.socketname, os.getuid(),
+                                      self.daemon.group)
+
+
 @unittest.mock.patch('scapy.all.SuperSocket.select',
                      side_effect=InterruptedError)
 @unittest.mock.patch('os.chmod')
 @unittest.mock.patch('os.chown')
 @unittest.mock.patch('socket.socket')
 @unittest.mock.patch('os.makedirs')
-class TestRunDaemonDefault(unittest.TestCase):
-    @unittest.mock.patch('grp.getgrnam')
-    def setUp(self, *args):
-        self.run_dir = "abcdef"
-        self.daemon = scapy_unroot.daemon.UnrootDaemon("group",
-                                                       run_dir=self.run_dir)
-
+class TestRunDaemonSetup(TestRunDaemonBase):
     def _assert_socket_correct(self, chown, chmod):
-        self.assertIsNotNone(self.daemon.socket)
+        super()._assert_socket_correct(chown, chmod)
         self.daemon.socket.bind.assert_called_once_with(self.daemon.socketname)
-        chown.assert_called_once_with(self.daemon.socketname, 0o660)
-        chmod.assert_called_once_with(self.daemon.socketname, os.getuid(),
-                                      self.daemon.group)
         self.daemon.socket.listen.assert_called_once()
 
     @unittest.mock.patch('os.path.exists', return_value=True)
-    def test_run_run_dir_exists(self, path_exists, makedirs, socket, chmod,
-                                chown, select):
+    def test_run__run_dir_exists(self, path_exists, makedirs, socket, chmod,
+                                 chown, select):
         self.assertIsNone(self.daemon.socket)
         # triggered by select mock to interrupt infinite loop
         with self.assertRaises(InterruptedError):
             self.daemon.run()
-        path_exists.assert_called_with(self.run_dir)
+        path_exists.assert_called_with(self.run_dir.name)
         makedirs.assert_not_called()
         self._assert_socket_correct(chown, chmod)
         select.assert_called()
 
     @unittest.mock.patch('os.path.exists', return_value=False)
-    def test_run_run_dir_not_exists(self, path_exists, makedirs, socket, chmod,
-                                    chown, select):
+    def test_run__run_dir_not_exists(self, path_exists, makedirs, socket,
+                                     chmod, chown, select):
         self.assertIsNone(self.daemon.socket)
         # triggered by select mock to interrupt infinite loop
         with self.assertRaises(InterruptedError):
             self.daemon.run()
-        path_exists.assert_called_with(self.run_dir)
-        makedirs.assert_called_once_with(self.run_dir)
+        path_exists.assert_called_with(self.run_dir.name)
+        makedirs.assert_called_once_with(self.run_dir.name)
         self._assert_socket_correct(chown, chmod)
         select.assert_called()

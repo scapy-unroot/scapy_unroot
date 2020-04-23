@@ -39,6 +39,11 @@ setup(
     url=url,
 
     keywords=["network"],
+    entry_points={
+        'console_scripts': [
+            'scapy-unroot = scapy_unroot.daemon:run',
+        ]
+    },
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Intended Audience :: Developers",

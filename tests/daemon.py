@@ -110,6 +110,7 @@ class TestRunDaemonSetup(TestRunDaemonBase):
         path_exists.assert_called_with(self.run_dir.name)
         makedirs.assert_called_once_with(self.run_dir.name)
         self._assert_socket_correct(chown, chmod)
+        # run loop was started
         select.assert_called()
 
 
@@ -127,7 +128,9 @@ class TestRunFunction(unittest.TestCase):
                      select):
         with self.assertRaises(InterruptedError):
             scapy_unroot.daemon.run()
+        # constructor was called
         getgrnam.assert_called_with("group")
+        # run loop was started
         select.assert_called()
 
     @unittest.mock.patch.object(sys, 'argv', ["run"])
@@ -140,5 +143,7 @@ class TestRunFunction(unittest.TestCase):
         exit.assert_called()
         # exit was not called with argument 0
         self.assertNotEqual(unittest.mock.call(0), exit.call_args)
+        # constructor was not called
         getgrnam.assert_not_called()
+        # run loop was not started
         select.assert_not_called()

@@ -20,6 +20,7 @@ import atexit
 import base64
 import grp
 import json
+import logging
 import os
 import socket
 import sys
@@ -40,7 +41,13 @@ BLACKLISTED = 5
 
 class UnrootDaemon:
     def __init__(self, group, daemonize=False, run_dir=RUN_DIR_DEFAULT,
-                 interface_blacklist=None):
+                 interface_blacklist=None, logger=None):
+        if logger is None:
+            module = self.__class__.__module__
+            name = self.__class__.__name__
+            if module is not None:
+                name = "{}.{}".format(module, name)
+            self.logger = logging.getLogger(name)
         self.group = grp.getgrnam(group).gr_gid
         self.daemonize = daemonize
         self.run_dir = run_dir
@@ -63,8 +70,8 @@ class UnrootDaemon:
                 # exit first parent
                 sys.exit(0)
         except OSError as exc:
-            print("fork #1 failed: {exc.errno} ({exc.strerror})"
-                  .format(exc=exc), file=sys.stderr)
+            self.logger.error("fork #1 failed: {exc.errno} ({exc.strerror})"
+                              .format(exc=exc))
             sys.exit(1)
 
         # decouple from parent environment
@@ -78,8 +85,8 @@ class UnrootDaemon:
                 # exit from second parent
                 sys.exit(0)
         except OSError as exc:
-            print("fork #1 failed: {exc.errno} ({exc.strerror})"
-                  .format(exc=exc), file=sys.stderr)
+            self.logger.error("fork #1 failed: {exc.errno} ({exc.strerror})"
+                              .format(exc=exc))
             sys.exit(1)
         output_file = os.path.join(self.run_dir, "output.log")
         output = open(output_file, 'a+')
@@ -262,8 +269,8 @@ class UnrootDaemon:
                                     else ts,
                                 }}, separators=(",", ":")))
                                 continue
-                        print("Unexpected socket selected {}".format(sock),
-                              file=sys.stderr)
+                        self.logger.error("Unexpected socket selected {}"
+                                          .format(sock))
                     except BrokenPipeError:
                         del read_sockets[sock]
                         for client in self.clients:

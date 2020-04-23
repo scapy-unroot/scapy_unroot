@@ -12,6 +12,7 @@ Tests for the daemon to enable using scapy without root.
 """
 
 import io
+import json
 import os
 import sys
 import tempfile
@@ -21,7 +22,7 @@ import threading
 import unittest
 import unittest.mock
 
-from scapy.all import SuperSocket
+from scapy.all import MTU, SuperSocket
 
 import scapy_unroot.daemon
 
@@ -373,6 +374,8 @@ class TestRunDaemonThreaded(TestRunDaemonBase):
 
 
 class TestSocketInteraction(TestRunDaemonThreaded):
+    blacklist = ["blacklisted_iface"]
+
     def setUp(self):
         super().setUp()
 
@@ -385,3 +388,26 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             sock.connect(self.daemon.socketname)
             self.assertTrue(self.wait_for_next_select(1))
             self.assertEqual(1, len(self.daemon.clients))
+
+    def test_broken_json(self):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(b"{,")
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            # broken JSON is silently ignored
+            with self.assertRaises(socket.timeout):
+                sock.recv(MTU)
+
+    @unittest.mock.patch("scapy.config.conf.L2socket")
+    def test_init_l2socket_no_args(self, L2socket):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(b'{"op":"init","type":"L2socket"}')
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("success", res)
+            L2socket.assert_called_once_with()

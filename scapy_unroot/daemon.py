@@ -32,7 +32,6 @@ UNKNOWN_OP = 1
 UNKNOWN_TYPE = 2
 UNINITILIZED = 3
 OS = 4
-BLACKLISTED = 5
 
 
 class UnrootDaemon:
@@ -126,8 +125,9 @@ class UnrootDaemon:
                 if iface in self.iface_blacklist:
                     return {
                         "error": {
-                            "type": BLACKLISTED,
-                            "msg": "Interface {} is blacklisted".format(iface),
+                            "type": OS,
+                            "msg": os.strerror(errno.EPERM),
+                            "errno": errno.EPERM,
                         }
                     }
                 try:

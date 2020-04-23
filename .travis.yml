@@ -1,13 +1,10 @@
 language: python
 python:
-  - "3.4"
-  - "3.5"
   - "3.6"
   - "3.7"
   - "3.8"
   - "3.8-dev"
   - "3.8-nightly"
-  - "pypy"
   - "pypy3"
 jobs:
   include:
@@ -17,8 +14,8 @@ jobs:
       language: shell       # 'language: python' is an error on Travis CI macOS
 install:
   - pip3 install --upgrade pip  # all three OSes agree about 'pip3'
-  - pip install -r requirements.txt
+  - pip3 install -r requirements.txt
 script:
-  - git -c core.whitespace="tab-in-indent,tabwidth=4" \
+  - git -c core.whitespace="tab-in-indent,tabwidth=4"
       diff --check $(git merge-base master HEAD)
-  - python ./setup.py test
+  - python3 ./setup.py test

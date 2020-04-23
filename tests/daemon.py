@@ -197,6 +197,15 @@ class TestRunDaemonized(TestRunDaemonBase):
         with open(self.daemon.pidfile) as f:
             self.assertEqual(getpid.return_value, int(f.read()))
 
+    def test_pidfile_removal(self, *args, **kwargs):
+        self.test_success__both_forked()
+        pidfile = self.daemon.pidfile
+        # check if pidfile is removed correctly
+        self.daemon.__del__()
+        self.daemon = False
+        self.assertTrue(os.path.exists(self.run_dir.name))
+        self.assertFalse(os.path.exists(pidfile))
+
     @unittest.mock.patch('os.fork', return_value=17273)
     def test_success__first_parent(self, fork, stdout, stderr, exit, select,
                                    socket, umask, setsid, chown, chmod,

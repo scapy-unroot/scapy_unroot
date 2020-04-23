@@ -61,4 +61,5 @@ setup(
 
     install_requires=list(get_requirements()),
     python_requires=">=3.4",
+    test_suite="tests"
 )

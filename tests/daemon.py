@@ -138,7 +138,7 @@ class TestRunFunction(unittest.TestCase):
         with self.assertRaises(InterruptedError):
             scapy_unroot.daemon.run()
         exit.assert_called()
-        self.assertEqual(1, len(exit.call_args.args))
-        self.assertNotEqual(0, exit.call_args.args[0])
+        # exit was not called with argument 0
+        self.assertNotEqual(unittest.mock.call(0), exit.call_args)
         getgrnam.assert_not_called()
         select.assert_not_called()

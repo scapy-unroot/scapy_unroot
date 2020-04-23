@@ -1,3 +1,4 @@
+sudo: false
 language: python
 python:
   - "3.6"
@@ -12,11 +13,13 @@ jobs:
       osx_image: xcode11.2  # Python 3.7.4 running on macOS 10.14.4
       language: shell       # 'language: python' is an error on Travis CI macOS
 install:
-  - pip3 install --upgrade pip flake8
+  - pip3 install --upgrade pip flake8 codecov
   - pip3 install -r requirements.txt
 before_script:
   - git -c core.whitespace="tab-in-indent,tabwidth=4"
       diff --check $(git merge-base master HEAD)
   - flake8 scapy_unroot tests
 script:
-  - python3 ./setup.py test
+  - coverage run ./setup.py test
+after_success:
+  - codecov

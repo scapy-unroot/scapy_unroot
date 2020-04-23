@@ -12,8 +12,6 @@
 scapy_unroot test suite
 """
 
-from __future__ import absolute_import
-
 import unittest
 
 
@@ -26,7 +24,3 @@ def test_all():
     test_suite = test_loader.discover('.')
     # run the test suite
     test_runner.run(test_suite)
-
-
-if __name__ == "__main__":
-    test_all()

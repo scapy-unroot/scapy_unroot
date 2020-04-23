@@ -82,7 +82,7 @@ class UnrootDaemon:
                 # exit from second parent
                 sys.exit(0)
         except OSError as exc:
-            self.logger.error("fork #1 failed: {exc.errno} ({exc.strerror})"
+            self.logger.error("fork #2 failed: {exc.errno} ({exc.strerror})"
                               .format(exc=exc))
             sys.exit(1)
         output_file = os.path.join(self.run_dir, "output.log")
@@ -93,12 +93,12 @@ class UnrootDaemon:
         os.dup2(output.fileno(), sys.stdout.fileno())
         os.dup2(output.fileno(), sys.stderr.fileno())
 
-        pidfile = os.path.join(self.run_dir, "pidfile")
+        self.pidfile = os.path.join(self.run_dir, "pidfile")
 
         atexit.register(self.__del__)
         pid = os.getpid()
         # write pidfile
-        with open(pidfile, "w+") as f:
+        with open(self.pidfile, "w+") as f:
             print("{}".format(pid), file=f)
         return pid
 

@@ -1,3 +1,7 @@
+[![Build Status]](https://travis-ci.com/miri64/scapy_unroot)
+
+[Build Status]: https://travis-ci.com/miri64/scapy_unroot.svg?branch=master
+
 # scapy-unroot
 Daemon and tooling to enable using scapy without root.
 

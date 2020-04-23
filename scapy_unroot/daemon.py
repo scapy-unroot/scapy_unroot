@@ -15,6 +15,7 @@ Daemon to enable using scapy without root.
 import argparse
 import atexit
 import base64
+import errno
 import grp
 import json
 import logging

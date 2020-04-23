@@ -250,7 +250,7 @@ class UnrootDaemon:
                         sock.send(
                             json.dumps(res, separators=(",", ":")).encode()
                         )
-                    except BrokenPipeError:
+                    except ConnectionError:
                         sock.close()
                         del self.clients[sock]
                         del read_sockets[sock]
@@ -269,7 +269,7 @@ class UnrootDaemon:
                                 continue
                         self.logger.error("Unexpected socket selected {}"
                                           .format(sock))
-                    except BrokenPipeError:
+                    except ConnectionError:
                         sock.close()
                         del read_sockets[sock]
                         for client in self.clients:

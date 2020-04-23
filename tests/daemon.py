@@ -65,13 +65,15 @@ class TestInitDaemon(unittest.TestCase):
 
 class TestRunDaemonBase(unittest.TestCase):
     daemonize = False
+    blacklist = None
 
     @unittest.mock.patch('grp.getgrnam')
     def setUp(self, *args):
         self.run_dir = tempfile.TemporaryDirectory()
         self.assertTrue(os.path.exists(self.run_dir.name))
         self.daemon = scapy_unroot.daemon.UnrootDaemon(
-            "group", run_dir=self.run_dir.name, daemonize=self.daemonize
+            "group", run_dir=self.run_dir.name, daemonize=self.daemonize,
+            interface_blacklist=self.blacklist
         )
 
     def tearDown(self):

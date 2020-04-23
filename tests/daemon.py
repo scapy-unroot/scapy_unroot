@@ -15,8 +15,12 @@ import io
 import os
 import sys
 import tempfile
+import socket
+import threading
 import unittest
 import unittest.mock
+
+from scapy.all import SuperSocket
 
 import scapy_unroot.daemon
 
@@ -301,3 +305,72 @@ class TestRunDaemonized(TestRunDaemonBase):
         dup2.assert_not_called()
         # run loop was not started
         select.assert_not_called()
+
+
+class TestRunDaemonThreaded(TestRunDaemonBase):
+    class Stop(BaseException):
+        pass
+
+    def _select_wrapper(self):
+        def _select(*args, **kwargs):
+            self.select_called.set()
+            if self.stop:
+                raise self.Stop()
+            res = self._orig_select(*args, **kwargs)
+            return res
+        return _select
+
+    def wait_for_next_select(self, timeout=None):
+        res = self.select_called.wait(timeout)
+        self.select_called.clear()
+        return res
+
+    def stop_daemon(self):
+        self.stop = True
+        # trigger select to exit
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+        self.assertTrue(self.stopped.wait(1))
+        self.stopped.clear()
+
+    @unittest.mock.patch('os.chmod')
+    @unittest.mock.patch('os.chown')
+    def setUp(self, *args):
+        super().setUp(*args)
+
+        def _run():
+            try:
+                self._orig_select = SuperSocket.select
+                SuperSocket.select = self._select_wrapper()
+                self.daemon.run()
+            except self.Stop:
+                self.stopped.set()
+                return
+
+        self.stop = False
+        self.select_called = threading.Event()
+        self.stopped = threading.Event()
+        self.daemon_thread = threading.Thread(target=_run)
+        self.daemon_thread.start()
+        self.assertTrue(self.wait_for_next_select(1))
+
+    def tearDown(self):
+        self.stop_daemon()
+        SuperSocket.select = self._orig_select
+        self.daemon.__del__()
+        super().tearDown()
+
+
+class TestSocketInteraction(TestRunDaemonThreaded):
+    def setUp(self):
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+
+    def test_accept(self):
+        self.assertEqual(0, len(self.daemon.clients))
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            self.assertEqual(1, len(self.daemon.clients))

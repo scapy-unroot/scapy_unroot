@@ -455,13 +455,16 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertEqual("That error", res["error"]["msg"])
             L2socket.assert_called_once_with(blafoo="test", this="that")
 
+    def _test_init_l2socket__no_args(self, sock, L2socket):
+        sock.connect(self.daemon.socketname)
+        self.assertTrue(self.wait_for_next_select(1))
+        sock.send(json.dumps({"op": "init",
+                              "type": "L2socket"}).encode())
+
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_init_l2socket__no_args(self, L2socket):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.connect(self.daemon.socketname)
-            self.assertTrue(self.wait_for_next_select(1))
-            sock.send(json.dumps({"op": "init",
-                                  "type": "L2socket"}).encode())
+            self._test_init_l2socket__no_args(sock, L2socket)
             self.assertTrue(self.wait_for_next_select(1))
             sock.settimeout(0.3)
             res = json.loads(sock.recv(MTU))
@@ -610,3 +613,28 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             res = json.loads(sock.recv(MTU))
             self.assertIn("success", res)
             L3socket6.assert_called_once_with(blafoo="test", this="that")
+
+    @unittest.mock.patch("scapy.config.conf.L2socket")
+    def test_close(self, L2socket):
+        self.assertEqual({}, self.daemon.clients)
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            self._test_init_l2socket__no_args(sock, L2socket)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            sock.recv(MTU)
+            L2socket.assert_called_once_with()
+            self.assertEqual(1, len(self.daemon.clients))
+            sock.send(json.dumps({"op": "close"}).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("closed", res)
+            self.assertEqual({}, self.daemon.clients)
+
+    @unittest.mock.patch("scapy.config.conf.L2socket")
+    def test_connection_reset_client(self, L2socket):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            self._test_init_l2socket__no_args(sock, L2socket)
+            sock.close()
+            self.assertTrue(self.wait_for_next_select(1))
+            L2socket.assert_called_once_with()
+            self.assertEqual({}, self.daemon.clients)

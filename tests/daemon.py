@@ -488,6 +488,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
         with unittest.mock.patch(
             "scapy.config.conf.{}".format(scapy_socket_type)
         ) as scapy_socket_mock:
+            scapy_socket_mock.return_value.fileno = lambda: 7
             self._test_init_scapy_socket(sock, scapy_socket_type,
                                          init_args)
             self.assertTrue(self.wait_for_next_select(1))
@@ -552,6 +553,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             "scapy.config.conf.{}".format(scapy_socket_type),
             side_effect=OSError(133, "That error")
         ) as scapy_socket_mock:
+            scapy_socket_mock.return_value.fileno = lambda: 7
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
                 self._test_init_scapy_socket(sock, scapy_socket_type,
                                              {"iface": self.blacklist[0]})
@@ -754,6 +756,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            L2socket.return_value.fileno = lambda: 7
             self._test_init_scapy_socket(sock, "L2socket")
             sock.close()
             self.assertTrue(self.wait_for_next_select(1))

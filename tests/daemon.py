@@ -451,6 +451,28 @@ class TestSocketInteraction(TestRunDaemonThreaded):
         self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
         return res
 
+    def _test_init_success(self, scapy_socket_type, init_args=None):
+        with unittest.mock.patch(
+            "scapy.config.conf.{}".format(scapy_socket_type)
+        ) as scapy_socket_mock:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                self._test_init_scapy_socket(sock, scapy_socket_type,
+                                             init_args)
+                self.assertTrue(self.wait_for_next_select(1))
+                sock.settimeout(0.3)
+                res = json.loads(sock.recv(MTU))
+                self.assertIn("success", res)
+                if init_args is None:
+                    scapy_socket_mock.assert_called_once_with()
+                else:
+                    scapy_socket_mock.assert_called_once_with(**init_args)
+                self.assertTrue(
+                    any("supersocket" in v and
+                        v["supersocket"] is scapy_socket_mock.return_value
+                        for v in self.daemon.clients.values()),
+                    msg="supersocket missing"
+                )
+
     @unittest.mock.patch("scapy.config.conf.L2socket",
                          side_effect=OSError(133, "That error"))
     def test_init_l2socket__oserror(self, L2socket):
@@ -465,19 +487,8 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              for v in self.daemon.clients.values()),
                              msg="A supersocket was unexpectedly added")
 
-    @unittest.mock.patch("scapy.config.conf.L2socket")
-    def test_init_l2socket__no_args(self, L2socket):
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            self._test_init_scapy_socket(sock, "L2socket")
-            self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
-            res = json.loads(sock.recv(MTU))
-            self.assertIn("success", res)
-            L2socket.assert_called_once_with()
-            self.assertTrue(any("supersocket" in v and
-                            v["supersocket"] is L2socket.return_value
-                            for v in self.daemon.clients.values()),
-                            msg="supersocket missing")
+    def test_init_l2socket__no_args(self):
+        self._test_init_success("L2socket")
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_init_l2socket__blacklisted_iface(self, L2socket):
@@ -492,20 +503,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              for v in self.daemon.clients.values()),
                              msg="A supersocket was unexpectedly added")
 
-    @unittest.mock.patch("scapy.config.conf.L2socket")
-    def test_init_l2socket__other_arg(self, L2socket):
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            self._test_init_scapy_socket(sock, "L2socket",
-                                         {"blafoo": "test", "this": "that"})
-            self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
-            res = json.loads(sock.recv(MTU))
-            self.assertIn("success", res)
-            L2socket.assert_called_once_with(blafoo="test", this="that")
-            self.assertTrue(any("supersocket" in v and
-                            v["supersocket"] is L2socket.return_value
-                            for v in self.daemon.clients.values()),
-                            msg="supersocket missing")
+    def test_init_l2socket__other_arg(self):
+        self._test_init_success("L2socket",
+                                {"blafoo": "test", "this": "that"})
 
     @unittest.mock.patch("scapy.config.conf.L2listen",
                          side_effect=OSError(133, "That error"))
@@ -521,20 +521,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              for v in self.daemon.clients.values()),
                              msg="A supersocket was unexpectedly added")
 
-    @unittest.mock.patch("scapy.config.conf.L2listen")
-    def test_init_l2listen__other_arg(self, L2listen):
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            self._test_init_scapy_socket(sock, "L2listen",
-                                         {"blafoo": "test", "this": "that"})
-            self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
-            res = json.loads(sock.recv(MTU))
-            self.assertIn("success", res)
-            L2listen.assert_called_once_with(blafoo="test", this="that")
-            self.assertTrue(any("supersocket" in v and
-                            v["supersocket"] is L2listen.return_value
-                            for v in self.daemon.clients.values()),
-                            msg="supersocket missing")
+    def test_init_l2listen__other_arg(self):
+        self._test_init_success("L2listen",
+                                {"blafoo": "test", "this": "that"})
 
     @unittest.mock.patch("scapy.config.conf.L3socket",
                          side_effect=OSError(133, "That error"))
@@ -550,20 +539,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              for v in self.daemon.clients.values()),
                              msg="A supersocket was unexpectedly added")
 
-    @unittest.mock.patch("scapy.config.conf.L3socket")
-    def test_init_l3socket__other_arg(self, L3socket):
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            self._test_init_scapy_socket(sock, "L3socket",
-                                         {"blafoo": "test", "this": "that"})
-            self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
-            res = json.loads(sock.recv(MTU))
-            self.assertIn("success", res)
-            L3socket.assert_called_once_with(blafoo="test", this="that")
-            self.assertTrue(any("supersocket" in v and
-                            v["supersocket"] is L3socket.return_value
-                            for v in self.daemon.clients.values()),
-                            msg="supersocket missing")
+    def test_init_l3socket__other_arg(self):
+        self._test_init_success("L3socket",
+                                {"blafoo": "test", "this": "that"})
 
     @unittest.mock.patch("scapy.config.conf.L3socket6",
                          side_effect=OSError(133, "That error"))
@@ -579,20 +557,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              for v in self.daemon.clients.values()),
                              msg="A supersocket was unexpectedly added")
 
-    @unittest.mock.patch("scapy.config.conf.L3socket6")
-    def test_init_l3socket6__other_arg(self, L3socket6):
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            self._test_init_scapy_socket(sock, "L3socket6",
-                                         {"blafoo": "test", "this": "that"})
-            self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
-            res = json.loads(sock.recv(MTU))
-            self.assertIn("success", res)
-            L3socket6.assert_called_once_with(blafoo="test", this="that")
-            self.assertTrue(any("supersocket" in v and
-                            v["supersocket"] is L3socket6.return_value
-                            for v in self.daemon.clients.values()),
-                            msg="supersocket missing")
+    def test_init_l3socket6__other_arg(self):
+        self._test_init_success("L3socket6",
+                                {"blafoo": "test", "this": "that"})
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_close(self, L2socket):

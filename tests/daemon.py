@@ -608,8 +608,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
         self._test_init_success("L3socket6",
                                 {"blafoo": "test", "this": "that"})
 
-    @unittest.mock.patch("scapy.config.conf.L2socket")
-    def test_close(self, L2socket):
+    def test_close(self):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             self._test_init_success_w_sock("L2listen", sock)
             sock.send(json.dumps({"op": "close"}).encode())

@@ -171,7 +171,7 @@ class UnrootDaemon:
                     }
                 }
             type = data.get("type", "raw")
-            bytes = base64.decode(data.get("data", ""))
+            bytes = base64.decodebytes(data.get("data", "").encode())
             if not hasattr(layers, type):
                 return {
                     "error": {

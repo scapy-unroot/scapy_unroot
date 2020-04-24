@@ -196,8 +196,9 @@ class UnrootDaemon:
             if "supersocket" in socket:
                 try:
                     socket["supersocket"].close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.warning("Error on closing {} ({})"
+                                        .format(socket["supersocket"], exc))
             return {"closed": str(socket["address"])}
         else:
             return {

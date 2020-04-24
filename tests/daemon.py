@@ -673,6 +673,22 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertRegex(res["error"]["msg"],
                              r"Socket for '.*' is uninitialized")
 
+    def test_write__unknown_type(self):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            self._test_init_success_w_sock("L3socket", sock)
+            sock.send(json.dumps({
+                "op": "write",
+                "type": "uedfgnlxtoxf",
+                "data": base64.encodebytes(b"test").decode(),
+            }).encode())
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
+                             res["error"]["type"])
+            self.assertEqual("Unknown packet type uedfgnlxtoxf",
+                             res["error"]["msg"])
+
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:

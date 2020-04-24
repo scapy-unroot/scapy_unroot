@@ -29,6 +29,9 @@ from scapy.all import conf, Ether, MTU, raw, SimpleSocket, SuperSocket
 import scapy_unroot.daemon
 
 
+MOCK_FD = 7
+
+
 @unittest.mock.patch('grp.getgrnam')
 class TestInitDaemon(unittest.TestCase):
     def test_success(self, getgrnam):
@@ -165,7 +168,7 @@ class TestRunFunction(unittest.TestCase):
 
 class FileNoStringIO(io.StringIO):
     def fileno(self):
-        return 1
+        return MOCK_FD
 
 
 @unittest.mock.patch('grp.getgrnam')
@@ -403,14 +406,16 @@ class TestSocketInteraction(TestRunDaemonThreaded):
 
     def setUp(self):
         super().setUp()
-        self._orig = {}
+        self._orig_os_fstat = os.fstat
+        self._orig_scapy_conf = {}
         for type in ["L2socket", "L2listen", "L3socket", "L3socket6"]:
-            self._orig[type] = getattr(conf, type)
+            self._orig_scapy_conf[type] = getattr(conf, type)
 
     def tearDown(self):
         super().tearDown()
+        os.fstat = self._orig_os_fstat
         for type in ["L2socket", "L2listen", "L3socket", "L3socket6"]:
-            self._orig[type] = setattr(conf, type, self._orig[type])
+            setattr(conf, type, self._orig_scapy_conf[type])
 
     def test_accept(self):
         self.assertDictEqual({}, self.daemon.clients)
@@ -504,12 +509,18 @@ class TestSocketInteraction(TestRunDaemonThreaded):
         self.assertEqual(2, len(self.daemon.read_sockets))
         return res
 
+    def _mock_fileno(self, scapy_socket_mock):
+        # make MOCK_FD valid
+        os.fstat = lambda fd: os.stat_result() if fd == MOCK_FD else \
+                   self._orig_os_fstat(fd)
+        scapy_socket_mock.return_value.fileno = lambda: MOCK_FD
+
     def _test_init_success_w_sock(self, scapy_socket_type, sock,
                                   init_args=None):
         with unittest.mock.patch(
             "scapy.config.conf.{}".format(scapy_socket_type)
         ) as scapy_socket_mock:
-            scapy_socket_mock.return_value.fileno = lambda: 7
+            self._mock_fileno(scapy_socket_mock)
             self._test_init_scapy_socket(sock, scapy_socket_type,
                                          init_args)
             self.assertTrue(self.wait_for_next_select(1))
@@ -576,7 +587,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             "scapy.config.conf.{}".format(scapy_socket_type),
             side_effect=OSError(133, "That error")
         ) as scapy_socket_mock:
-            scapy_socket_mock.return_value.fileno = lambda: 7
+            self._mock_fileno(scapy_socket_mock)
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
                 self._test_init_scapy_socket(sock, scapy_socket_type,
                                              {"iface": self.blacklist[0]})
@@ -779,7 +790,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            L2socket.return_value.fileno = lambda: 7
+            self._mock_fileno(L2socket)
             self._test_init_scapy_socket(sock, "L2socket")
             sock.close()
             self.assertTrue(self.wait_for_next_select(1))

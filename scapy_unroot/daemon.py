@@ -233,16 +233,6 @@ class UnrootDaemon:
                             res = self._eval_data(data, self.clients[sock])
                         except json.decoder.JSONDecodeError:
                             continue
-                        if "closed" in res:
-                            try:
-                                del read_sockets[
-                                    self.clients[sock].get("supersocket")
-                                ]
-                                del self.clients[sock]
-                                del read_sockets[sock]
-                            except KeyError:
-                                pass
-                            sock.close()
                         if "init" in res:
                             read_sockets[self.clients[sock]["supersocket"]] = \
                                 "supersocket.{}".format(
@@ -251,10 +241,18 @@ class UnrootDaemon:
                         sock.send(
                             json.dumps(res, separators=(",", ":")).encode()
                         )
+                        if "closed" in res:
+                            read_sockets.pop(
+                                self.clients[sock].get("supersocket"),
+                                None
+                            )
+                            self.clients.pop(sock, None)
+                            read_sockets.pop(sock, None)
+                            sock.close()
                     except ConnectionError:
+                        self.clients.pop(sock, None)
+                        read_sockets.pop(sock, None)
                         sock.close()
-                        del self.clients[sock]
-                        del read_sockets[sock]
                 else:
                     try:
                         for client in self.clients:
@@ -272,10 +270,11 @@ class UnrootDaemon:
                                           .format(sock))
                     except ConnectionError:
                         sock.close()
-                        del read_sockets[sock]
+                        read_sockets.pop(sock, None)
                         for client in self.clients:
                             if sock == self.clients[client]["supersocket"]:
-                                del client[client]
+                                self.clients.pop(client, None)
+                                break
 
 
 def run():

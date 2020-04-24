@@ -14,6 +14,7 @@ Daemon to enable using scapy without root.
 
 import argparse
 import atexit
+import binascii
 import base64
 import errno
 import grp
@@ -32,7 +33,8 @@ RUN_DIR_DEFAULT = "/var/run/scapy-unroot"
 UNKNOWN_OP = 1
 UNKNOWN_TYPE = 2
 UNINITILIZED = 3
-OS = 4
+INVALID_DATA = 4
+OS = 5
 
 
 class UnrootDaemon:
@@ -171,7 +173,17 @@ class UnrootDaemon:
                     }
                 }
             type = data.get("type", "raw")
-            bytes = base64.decodebytes(data.get("data", "").encode())
+            try:
+                bytes = base64.decodebytes(data.get("data", "").encode())
+            except binascii.Error:
+                return {
+                    "error": {
+                        "type": INVALID_DATA,
+                        "msg": "data '{}' is not base64 encoded".format(
+                            data.get("data", "")
+                        ),
+                    }
+                }
             if not hasattr(layers, type):
                 return {
                     "error": {

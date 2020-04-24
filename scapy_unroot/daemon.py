@@ -162,7 +162,7 @@ class UnrootDaemon:
                         ),
                     }
                 }
-        elif op == "write":
+        elif op == "send":
             if "supersocket" not in socket:
                 return {
                     "error": {

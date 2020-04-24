@@ -23,7 +23,7 @@ import threading
 import unittest
 import unittest.mock
 
-from scapy.all import MTU, SuperSocket
+from scapy.all import conf, MTU, SimpleSocket, SuperSocket
 
 import scapy_unroot.daemon
 
@@ -400,6 +400,17 @@ class TestRunDaemonThreaded(TestRunDaemonBase):
 class TestSocketInteraction(TestRunDaemonThreaded):
     blacklist = ["blacklisted_iface"]
 
+    def setUp(self):
+        super().setUp()
+        self._orig = {}
+        for type in ["L2socket", "L2listen", "L3socket", "L3socket6"]:
+            self._orig[type] = getattr(conf, type)
+
+    def tearDown(self):
+        super().tearDown()
+        for type in ["L2socket", "L2listen", "L3socket", "L3socket6"]:
+            self._orig[type] = setattr(conf, type, self._orig[type])
+
     def test_accept(self):
         self.assertEqual(0, len(self.daemon.clients))
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -479,6 +490,24 @@ class TestSocketInteraction(TestRunDaemonThreaded):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             self._test_init_success_w_sock(scapy_socket_type, sock, init_args)
 
+    def _test_init_wrong_args(self, scapy_socket_type):
+        setattr(conf, scapy_socket_type, SimpleSocket)
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            init_args = {"why_would_you_even_pfgncd": 37165}
+            self._test_init_scapy_socket(sock, scapy_socket_type,
+                                         init_args)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
+                             res["error"]["type"])
+            self.assertIn("__init__() got an unexpected keyword argument ",
+                          res["error"]["msg"])
+            self.assertFalse(any("supersocket" in v
+                             for v in self.daemon.clients.values()),
+                             msg="A supersocket was unexpectedly added")
+
     def _test_init_oserror(self, scapy_socket_type, init_args=None):
         with unittest.mock.patch(
             "scapy.config.conf.{}".format(scapy_socket_type),
@@ -517,6 +546,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     def test_init_l2socket__oserror(self):
         self._test_init_oserror("L2socket", {"blafoo": "test", "this": "that"})
 
+    def test_init_l2socket__wrong_args(self):
+        self._test_init_wrong_args("L2socket")
+
     def test_init_l2socket__no_args(self):
         self._test_init_success("L2socket")
 
@@ -529,6 +561,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
 
     def test_init_l2listen__oserror(self):
         self._test_init_oserror("L2listen", {"blafoo": "test", "this": "that"})
+
+    def test_init_l2listen__wrong_args(self):
+        self._test_init_wrong_args("L2listen")
 
     def test_init_l2listen__no_args(self):
         self._test_init_success("L2listen")
@@ -543,6 +578,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     def test_init_l3socket__oserror(self):
         self._test_init_oserror("L3socket", {"blafoo": "test", "this": "that"})
 
+    def test_init_l3socket__wrong_args(self):
+        self._test_init_wrong_args("L3socket")
+
     def test_init_l3socket__no_args(self):
         self._test_init_success("L3socket")
 
@@ -556,6 +594,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     def test_init_l3socket6__oserror(self):
         self._test_init_oserror("L3socket6",
                                 {"blafoo": "test", "this": "that"})
+
+    def test_init_l3socket6__wrong_args(self):
+        self._test_init_wrong_args("L3socket6")
 
     def test_init_l3socket6__no_args(self):
         self._test_init_success("L3socket6")

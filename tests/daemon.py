@@ -657,12 +657,12 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 for line in cm.output
             ), msg="No warning about unknown socket {}".format(sock))
 
-    def test_write__uninitialized(self):
+    def test_send__uninitialized(self):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(self.daemon.socketname)
             self.assertTrue(self.wait_for_next_select(1))
             sock.send(json.dumps({
-                "op": "write",
+                "op": "send",
                 "data": base64.encodebytes(b"test").decode(),
             }).encode())
             sock.settimeout(0.3)
@@ -673,11 +673,11 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertRegex(res["error"]["msg"],
                              r"Socket for '.*' is uninitialized")
 
-    def test_write__unknown_type(self):
+    def test_send__unknown_type(self):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             self._test_init_success_w_sock("L3socket", sock)
             sock.send(json.dumps({
-                "op": "write",
+                "op": "send",
                 "type": "uedfgnlxtoxf",
                 "data": base64.encodebytes(b"test").decode(),
             }).encode())
@@ -689,11 +689,11 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertEqual("Unknown packet type uedfgnlxtoxf",
                              res["error"]["msg"])
 
-    def test_write__non_base64_data(self):
+    def test_send__non_base64_data(self):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             self._test_init_success_w_sock("L3socket", sock)
             sock.send(json.dumps({
-                "op": "write",
+                "op": "send",
                 "data": "*#%/\\\0",
             }).encode())
             sock.settimeout(0.3)
@@ -704,20 +704,20 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertEqual("data '*#%/\\\0' is not base64 encoded",
                              res["error"]["msg"])
 
-    def _test_write_correct(self, sock, req, mock_attrs=None):
+    def _test_send_correct(self, sock, req, mock_attrs=None):
         self._test_init_success_w_sock("L3socket6", sock)
         supersocket = next(iter(self.daemon.clients.values()))[
             "supersocket"
         ]
         if mock_attrs is not None:
             supersocket.configure_mock(**mock_attrs)
-        req["op"] = "write"
+        req["op"] = "send"
         sock.send(json.dumps(req).encode())
         sock.settimeout(0.3)
         res = json.loads(sock.recv(MTU))
         return supersocket, res
 
-    def _test_write_success(self, packet_type=None):
+    def _test_send_success(self, packet_type=None):
         test_data = b"%\x8a:\xde\x14\rc\x97\x0fcI\xf08\xde\xf7\xa4\x98m\x04@"
         req = {"data": base64.encodebytes(test_data).decode()}
         if packet_type is None:
@@ -726,17 +726,17 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             req["type"] = packet_type.__name__
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
 
-            supersocket, res = self._test_write_correct(
+            supersocket, res = self._test_send_correct(
                 sock, req, {'send.return_value': len(test_data)}
             )
             self.assertIn("success", res)
             supersocket.send.called_with(packet_type(test_data))
 
-    def test_write__oserror(self):
+    def test_send__oserror(self):
         test_data = b"%\x8a:\xde\x14\rc\x97\x0fcI\xf08\xde\xf7\xa4\x98m\x04@"
         req = {"data": base64.encodebytes(test_data).decode()}
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            supersocket, res = self._test_write_correct(
+            supersocket, res = self._test_send_correct(
                 sock, req, {'send.side_effect': OSError(180, "Arghs!")}
             )
             supersocket.send.called_with(raw(test_data))
@@ -745,11 +745,11 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertEqual(180, res["error"]["errno"])
             self.assertEqual("Arghs!", res["error"]["msg"])
 
-    def test_write__success_raw(self):
-        self._test_write_success()
+    def test_send__success_raw(self):
+        self._test_send_success()
 
-    def test_write__success_ether(self):
-        self._test_write_success(Ether)
+    def test_send__success_ether(self):
+        self._test_send_success(Ether)
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):

@@ -24,7 +24,7 @@ import threading
 import unittest
 import unittest.mock
 
-from scapy.all import conf, MTU, SimpleSocket, SuperSocket
+from scapy.all import conf, Ether, MTU, raw, SimpleSocket, SuperSocket
 
 import scapy_unroot.daemon
 
@@ -703,6 +703,40 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              res["error"]["type"])
             self.assertEqual("data '*#%/\\\0' is not base64 encoded",
                              res["error"]["msg"])
+
+    def _test_write_correct(self, sock, req, mock_attrs=None):
+        self._test_init_success_w_sock("L3socket6", sock)
+        supersocket = next(iter(self.daemon.clients.values()))[
+            "supersocket"
+        ]
+        if mock_attrs is not None:
+            supersocket.configure_mock(**mock_attrs)
+        req["op"] = "write"
+        sock.send(json.dumps(req).encode())
+        sock.settimeout(0.3)
+        res = json.loads(sock.recv(MTU))
+        return supersocket, res
+
+    def _test_write_success(self, packet_type=None):
+        test_data = b"%\x8a:\xde\x14\rc\x97\x0fcI\xf08\xde\xf7\xa4\x98m\x04@"
+        req = {"data": base64.encodebytes(test_data).decode()}
+        if packet_type is None:
+            packet_type = raw
+        else:
+            req["type"] = packet_type.__name__
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+
+            supersocket, res = self._test_write_correct(
+                sock, req, {'send.return_value': len(test_data)}
+            )
+            self.assertIn("success", res)
+            supersocket.send.called_with(packet_type(test_data))
+
+    def test_write__success_raw(self):
+        self._test_write_success()
+
+    def test_write__success_ether(self):
+        self._test_write_success(Ether)
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):

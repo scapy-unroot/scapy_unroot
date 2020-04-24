@@ -637,6 +637,31 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertDictEqual({}, self.daemon.clients)
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
+    def test_broken_close(self, L2socket):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            self._test_init_scapy_socket(sock, "L2socket")
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertEqual(1, len(self.daemon.clients))
+            supersocket = next(iter(self.daemon.clients.values()))[
+                "supersocket"
+            ]
+            attrs = {'close.side_effect': Exception("Testing")}
+            supersocket.configure_mock(**attrs)
+            with self.assertLogs('scapy_unroot.daemon', level='WARNING') as cm:
+                sock.send(json.dumps({"op": "close"}).encode())
+                self.assertTrue(self.wait_for_next_select(1))
+                res = json.loads(sock.recv(MTU))
+            self.assertIn("closed", res)
+            self.assertDictEqual({}, self.daemon.clients)
+            # check if log error was printed correctly
+            self.assertTrue(any(
+                "Error on closing {}".format(supersocket) in line
+                for line in cm.output
+            ), msg="No warning about unknown socket {}".format(sock))
+
+    @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             self._test_init_scapy_socket(sock, "L2socket")

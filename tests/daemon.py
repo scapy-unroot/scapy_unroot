@@ -498,24 +498,30 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                                  for v in self.daemon.clients.values()),
                                  msg="A supersocket was unexpectedly added")
 
+    def _test_init_blacklisted_iface(self, scapy_socket_type):
+        with unittest.mock.patch(
+            "scapy.config.conf.{}".format(scapy_socket_type),
+            side_effect=OSError(133, "That error")
+        ) as scapy_socket_mock:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                self._test_init_scapy_socket(sock, scapy_socket_type,
+                                             {"iface": self.blacklist[0]})
+                res = self._expect_init_oserror(sock)
+                self.assertEqual(errno.EPERM, res["error"]["errno"])
+                self.assertEqual(os.strerror(errno.EPERM), res["error"]["msg"])
+                scapy_socket_mock.assert_not_called()
+                self.assertFalse(any("supersocket" in v
+                                 for v in self.daemon.clients.values()),
+                                 msg="A supersocket was unexpectedly added")
+
     def test_init_l2socket__oserror(self):
         self._test_init_oserror("L2socket", {"blafoo": "test", "this": "that"})
 
     def test_init_l2socket__no_args(self):
         self._test_init_success("L2socket")
 
-    @unittest.mock.patch("scapy.config.conf.L2socket")
-    def test_init_l2socket__blacklisted_iface(self, L2socket):
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            self._test_init_scapy_socket(sock, "L2socket",
-                                         {"iface": self.blacklist[0]})
-            res = self._expect_init_oserror(sock)
-            self.assertEqual(errno.EPERM, res["error"]["errno"])
-            self.assertEqual(os.strerror(errno.EPERM), res["error"]["msg"])
-            L2socket.assert_not_called()
-            self.assertFalse(any("supersocket" in v
-                             for v in self.daemon.clients.values()),
-                             msg="A supersocket was unexpectedly added")
+    def test_init_l2socket__blacklisted_iface(self):
+        self._test_init_blacklisted_iface("L2socket")
 
     def test_init_l2socket__other_arg(self):
         self._test_init_success("L2socket",
@@ -527,6 +533,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     def test_init_l2listen__no_args(self):
         self._test_init_success("L2listen")
 
+    def test_init_l2listen__blacklisted_iface(self):
+        self._test_init_blacklisted_iface("L2listen")
+
     def test_init_l2listen__other_arg(self):
         self._test_init_success("L2listen",
                                 {"blafoo": "test", "this": "that"})
@@ -536,6 +545,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
 
     def test_init_l3socket__no_args(self):
         self._test_init_success("L3socket")
+
+    def test_init_l3socket__blacklisted_iface(self):
+        self._test_init_blacklisted_iface("L3socket")
 
     def test_init_l3socket__other_arg(self):
         self._test_init_success("L3socket",

@@ -155,7 +155,7 @@ class UnrootDaemon:
                 return {
                     "error": {
                         "type": UNKNOWN_TYPE,
-                        "msg": "Unknown socket type {}".format(
+                        "msg": "Unknown socket type '{}'".format(
                             data.get("type")
                         ),
                     }

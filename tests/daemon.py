@@ -24,7 +24,7 @@ import threading
 import unittest
 import unittest.mock
 
-from scapy.all import conf, Ether, MTU, raw, SimpleSocket, SuperSocket
+from scapy.all import conf, Ether, IP, MTU, raw, SimpleSocket, SuperSocket
 
 import scapy_unroot.daemon
 
@@ -791,3 +791,72 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertTrue(self.wait_for_next_select(1))
             L2socket.assert_called_once_with()
             self.assertEqual({}, self.daemon.clients)
+
+
+class TestRunDaemonReceive(TestRunDaemonBase):
+    def setUp(self, *args):
+        super().setUp(*args)
+        self.sock = unittest.mock.MagicMock()
+
+    def tearDown(self, *args):
+        super().tearDown(*args)
+        self.sock.reset()
+
+    @unittest.mock.patch('os.chmod')
+    @unittest.mock.patch('os.chown')
+    @unittest.mock.patch('scapy.all.SuperSocket.select')
+    def _run_daemon(self, client, select, *args):
+        select.side_effect = [([self.sock], None), InterruptedError]
+        self.daemon.clients[client] = {"supersocket": self.sock}
+        with self.assertRaises(InterruptedError):
+            self.daemon.run()
+
+    def test_receive__success(self):
+        data = b"\x9c\x1f]8\x19\xc2P\x99>\xc3\xa0\xb9yh\x8a$\xbe\x8d[\xe7c" \
+               b"\x00\xd3\xdbM\x0c\xc2\xb4\xd3\x1d"
+        ts = 5975408383.001369
+        client = unittest.mock.MagicMock()
+        attrs = {'recv.return_value': (IP, data, ts)}
+        self.sock.configure_mock(**attrs)
+        with self.assertLogs('scapy_unroot.daemon', level='INFO') as cm:
+            self._run_daemon(client)
+        self.assertTrue(any(
+            "Sending IP(" in line for line in cm.output
+        ))
+        self.assertTrue(any(
+            "Unexpected socket selected" not in line for line in cm.output
+        ))
+        client.send.assert_called_once_with(
+            '{{"recv":{{"type":"IP","data":"{}","ts":{}}}}}'
+            .format(base64.b64encode(data).decode(), ts)
+        )
+
+    def test_receive__connection_error1(self):
+        client = unittest.mock.MagicMock()
+        attrs = {'recv.side_effect': ConnectionError}
+        self.sock.configure_mock(**attrs)
+        self._run_daemon(client)
+        client.send.assert_not_called()
+        self.assertNotIn(client, self.daemon.clients)
+        self.assertEqual(1, len(self.daemon.read_sockets))
+        self.assertIn(self.daemon.socket, self.daemon.read_sockets)
+
+    def test_receive__connection_error2(self):
+        data = b'\xfd\xbcm\t\xf6'
+        ts = 434950436.991872
+        attrs = {
+            'send.side_effect': ConnectionError,
+        }
+        client = unittest.mock.MagicMock(**attrs)
+        attrs = {
+            'recv.return_value': (raw, data, ts),
+        }
+        self.sock.configure_mock(**attrs)
+        self._run_daemon(client)
+        client.send.assert_called_once_with(
+            '{{"recv":{{"type":"raw","data":"{}","ts":{}}}}}'
+            .format(base64.b64encode(data).decode(), ts)
+        )
+        self.assertNotIn(client, self.daemon.clients)
+        self.assertEqual(1, len(self.daemon.read_sockets))
+        self.assertIn(self.daemon.socket, self.daemon.read_sockets)

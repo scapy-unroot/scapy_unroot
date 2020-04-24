@@ -429,6 +429,24 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             with self.assertRaises(socket.timeout):
                 sock.recv(MTU)
 
+    def test_unknown_op(self):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "thisdoesnotexist",
+                "type": "thisdoesnotexist",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.UNKNOWN_OP,
+                             res["error"]["type"])
+            self.assertEqual("Operation 'thisdoesnotexist' unknown",
+                             res["error"]["msg"])
+
     def test_init_unknown_type(self):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(self.daemon.socketname)

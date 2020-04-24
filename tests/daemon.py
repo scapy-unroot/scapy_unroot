@@ -451,27 +451,33 @@ class TestSocketInteraction(TestRunDaemonThreaded):
         self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
         return res
 
-    def _test_init_success(self, scapy_socket_type, init_args=None):
+    def _test_init_success_w_sock(self, scapy_socket_type, sock,
+                                  init_args=None):
+        self.assertDictEqual({}, self.daemon.clients)
         with unittest.mock.patch(
             "scapy.config.conf.{}".format(scapy_socket_type)
         ) as scapy_socket_mock:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-                self._test_init_scapy_socket(sock, scapy_socket_type,
-                                             init_args)
-                self.assertTrue(self.wait_for_next_select(1))
-                sock.settimeout(0.3)
-                res = json.loads(sock.recv(MTU))
-                self.assertIn("success", res)
-                if init_args is None:
-                    scapy_socket_mock.assert_called_once_with()
-                else:
-                    scapy_socket_mock.assert_called_once_with(**init_args)
-                self.assertTrue(
-                    any("supersocket" in v and
-                        v["supersocket"] is scapy_socket_mock.return_value
-                        for v in self.daemon.clients.values()),
-                    msg="supersocket missing"
-                )
+            self._test_init_scapy_socket(sock, scapy_socket_type,
+                                         init_args)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("success", res)
+            if init_args is None:
+                scapy_socket_mock.assert_called_once_with()
+            else:
+                scapy_socket_mock.assert_called_once_with(**init_args)
+            self.assertTrue(
+                any("supersocket" in v and
+                    v["supersocket"] is scapy_socket_mock.return_value
+                    for v in self.daemon.clients.values()),
+                msg="supersocket missing"
+            )
+            self.assertEqual(1, len(self.daemon.clients))
+
+    def _test_init_success(self, scapy_socket_type, init_args=None):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            self._test_init_success_w_sock(scapy_socket_type, sock, init_args)
 
     def _test_init_oserror(self, scapy_socket_type, init_args=None):
         with unittest.mock.patch(
@@ -542,25 +548,22 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     def test_init_l3socket6__no_args(self):
         self._test_init_success("L3socket6")
 
+    def test_init_l3socket6__blacklisted_iface(self):
+        self._test_init_blacklisted_iface("L3socket6")
+
     def test_init_l3socket6__other_arg(self):
         self._test_init_success("L3socket6",
                                 {"blafoo": "test", "this": "that"})
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_close(self, L2socket):
-        self.assertEqual({}, self.daemon.clients)
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            self._test_init_scapy_socket(sock, "L2socket")
-            self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
-            sock.recv(MTU)
-            L2socket.assert_called_once_with()
-            self.assertEqual(1, len(self.daemon.clients))
+            self._test_init_success_w_sock("L2listen", sock)
             sock.send(json.dumps({"op": "close"}).encode())
             self.assertTrue(self.wait_for_next_select(1))
             res = json.loads(sock.recv(MTU))
             self.assertIn("closed", res)
-            self.assertEqual({}, self.daemon.clients)
+            self.assertDictEqual({}, self.daemon.clients)
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):

@@ -637,14 +637,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertIn("closed", res)
             self.assertDictEqual({}, self.daemon.clients)
 
-    @unittest.mock.patch("scapy.config.conf.L2socket")
-    def test_broken_close(self, L2socket):
+    def test_broken_close(self):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            self._test_init_scapy_socket(sock, "L2socket")
-            self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
-            res = json.loads(sock.recv(MTU))
-            self.assertEqual(1, len(self.daemon.clients))
+            self._test_init_success_w_sock("L2socket", sock)
             supersocket = next(iter(self.daemon.clients.values()))[
                 "supersocket"
             ]

@@ -136,6 +136,13 @@ class UnrootDaemon:
                     return {
                         "success": 0
                     }
+                except TypeError as e:
+                    return {
+                        "error": {
+                            "type": UNKNOWN_TYPE,
+                            "msg": str(e),
+                        }
+                    }
                 except OSError as e:
                     return {
                         "error": {

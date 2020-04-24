@@ -695,7 +695,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertTrue(self.wait_for_next_select(1))
             sock.send(json.dumps({
                 "op": "send",
-                "data": base64.encodebytes(b"test").decode(),
+                "data": base64.b64encode(b"test").decode(),
             }).encode())
             sock.settimeout(0.3)
             res = json.loads(sock.recv(MTU))
@@ -711,7 +711,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             sock.send(json.dumps({
                 "op": "send",
                 "type": "uedfgnlxtoxf",
-                "data": base64.encodebytes(b"test").decode(),
+                "data": base64.b64encode(b"test").decode(),
             }).encode())
             sock.settimeout(0.3)
             res = json.loads(sock.recv(MTU))
@@ -751,7 +751,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
 
     def _test_send_success(self, packet_type=None):
         test_data = b"%\x8a:\xde\x14\rc\x97\x0fcI\xf08\xde\xf7\xa4\x98m\x04@"
-        req = {"data": base64.encodebytes(test_data).decode()}
+        req = {"data": base64.b64encode(test_data).decode()}
         if packet_type is None:
             packet_type = raw
         else:
@@ -766,7 +766,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
 
     def test_send__oserror(self):
         test_data = b"%\x8a:\xde\x14\rc\x97\x0fcI\xf08\xde\xf7\xa4\x98m\x04@"
-        req = {"data": base64.encodebytes(test_data).decode()}
+        req = {"data": base64.b64encode(test_data).decode()}
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             supersocket, res = self._test_send_correct(
                 sock, req, {'send.side_effect': OSError(180, "Arghs!")}

@@ -174,7 +174,7 @@ class UnrootDaemon:
                 }
             type = data.get("type", "raw")
             try:
-                bytes = base64.decodebytes(data.get("data", "").encode())
+                bytes = base64.b64decode(data.get("data", "").encode())
             except binascii.Error:
                 return {
                     "error": {

@@ -253,7 +253,8 @@ class UnrootDaemon:
                             res = self._eval_data(data, self.clients[sock])
                         except json.decoder.JSONDecodeError:
                             continue
-                        if "init" in res:
+                        if data.get("op", None) == "init" and \
+                           "supersocket" in self.clients[sock]:
                             self.read_sockets[
                                 self.clients[sock]["supersocket"]
                             ] = "supersocket.{}".format(

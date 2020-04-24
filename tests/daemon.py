@@ -518,12 +518,18 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     def test_init_l2listen__oserror(self):
         self._test_init_oserror("L2listen", {"blafoo": "test", "this": "that"})
 
+    def test_init_l2listen__no_args(self):
+        self._test_init_success("L2listen")
+
     def test_init_l2listen__other_arg(self):
         self._test_init_success("L2listen",
                                 {"blafoo": "test", "this": "that"})
 
     def test_init_l3socket__oserror(self):
         self._test_init_oserror("L3socket", {"blafoo": "test", "this": "that"})
+
+    def test_init_l3socket__no_args(self):
+        self._test_init_success("L3socket")
 
     def test_init_l3socket__other_arg(self):
         self._test_init_success("L3socket",
@@ -532,6 +538,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     def test_init_l3socket6__oserror(self):
         self._test_init_oserror("L3socket6",
                                 {"blafoo": "test", "this": "that"})
+
+    def test_init_l3socket6__no_args(self):
+        self._test_init_success("L3socket6")
 
     def test_init_l3socket6__other_arg(self):
         self._test_init_success("L3socket6",

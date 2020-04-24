@@ -112,7 +112,7 @@ class TestRunDaemonSetup(TestRunDaemonBase):
         path_exists.assert_called_with(self.run_dir.name)
         makedirs.assert_not_called()
         self._assert_socket_correct(chown, chmod)
-        select.assert_called()
+        select.assert_called_with(self.daemon.read_sockets)
 
     @unittest.mock.patch('os.path.exists', return_value=False)
     def test_run__run_dir_not_exists(self, path_exists, makedirs, socket,
@@ -125,7 +125,7 @@ class TestRunDaemonSetup(TestRunDaemonBase):
         makedirs.assert_called_once_with(self.run_dir.name)
         self._assert_socket_correct(chown, chmod)
         # run loop was started
-        select.assert_called()
+        select.assert_called_with(self.daemon.read_sockets)
 
 
 @unittest.mock.patch('scapy.all.SuperSocket.select',
@@ -204,7 +204,7 @@ class TestRunDaemonized(TestRunDaemonBase):
                          self.daemon.pidfile)
         dup2.assert_called()
         # run loop was started
-        select.assert_called()
+        select.assert_called_with(self.daemon.read_sockets)
         self.assertTrue(os.path.exists(self.daemon.pidfile))
         with open(self.daemon.pidfile) as f:
             self.assertEqual(getpid.return_value, int(f.read()))
@@ -413,13 +413,17 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self._orig[type] = setattr(conf, type, self._orig[type])
 
     def test_accept(self):
-        self.assertEqual(0, len(self.daemon.clients))
+        self.assertDictEqual({}, self.daemon.clients)
+        self.assertEqual(1, len(self.daemon.read_sockets))
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(self.daemon.socketname)
             self.assertTrue(self.wait_for_next_select(1))
             self.assertEqual(1, len(self.daemon.clients))
+            self.assertEqual(2, len(self.daemon.read_sockets))
 
     def test_broken_json(self):
+        self.assertDictEqual({}, self.daemon.clients)
+        self.assertEqual(1, len(self.daemon.read_sockets))
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(self.daemon.socketname)
             self.assertTrue(self.wait_for_next_select(1))
@@ -429,8 +433,12 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             # broken JSON is silently ignored
             with self.assertRaises(socket.timeout):
                 sock.recv(MTU)
+            self.assertEqual(1, len(self.daemon.clients))
+            self.assertEqual(2, len(self.daemon.read_sockets))
 
     def test_unknown_op(self):
+        self.assertDictEqual({}, self.daemon.clients)
+        self.assertEqual(1, len(self.daemon.read_sockets))
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(self.daemon.socketname)
             self.assertTrue(self.wait_for_next_select(1))
@@ -447,8 +455,12 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              res["error"]["type"])
             self.assertEqual("Operation 'thisdoesnotexist' unknown",
                              res["error"]["msg"])
+            self.assertEqual(1, len(self.daemon.clients))
+            self.assertEqual(2, len(self.daemon.read_sockets))
 
     def test_init_unknown_type(self):
+        self.assertDictEqual({}, self.daemon.clients)
+        self.assertEqual(1, len(self.daemon.read_sockets))
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.connect(self.daemon.socketname)
             self.assertTrue(self.wait_for_next_select(1))
@@ -465,26 +477,35 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              res["error"]["type"])
             self.assertEqual("Unknown socket type 'thisdoesnotexist'",
                              res["error"]["msg"])
+            self.assertEqual(1, len(self.daemon.clients))
+            self.assertEqual(2, len(self.daemon.read_sockets))
 
     def _test_init_scapy_socket(self, sock, scapy_socket_type, init_args=None):
+        self.assertDictEqual({}, self.daemon.clients)
+        self.assertEqual(1, len(self.daemon.read_sockets))
         sock.connect(self.daemon.socketname)
         self.assertTrue(self.wait_for_next_select(1))
+        self.assertEqual(1, len(self.daemon.clients))
+        self.assertEqual(2, len(self.daemon.read_sockets))
         req = {"op": "init", "type": scapy_socket_type}
         if init_args is not None:
             req["args"] = init_args
         sock.send(json.dumps(req).encode())
 
     def _expect_init_oserror(self, sock):
+        self.assertEqual(1, len(self.daemon.clients))
+        self.assertEqual(2, len(self.daemon.read_sockets))
         self.assertTrue(self.wait_for_next_select(1))
         sock.settimeout(0.3)
         res = json.loads(sock.recv(MTU))
         self.assertIn("error", res)
         self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+        self.assertEqual(1, len(self.daemon.clients))
+        self.assertEqual(2, len(self.daemon.read_sockets))
         return res
 
     def _test_init_success_w_sock(self, scapy_socket_type, sock,
                                   init_args=None):
-        self.assertDictEqual({}, self.daemon.clients)
         with unittest.mock.patch(
             "scapy.config.conf.{}".format(scapy_socket_type)
         ) as scapy_socket_mock:
@@ -505,7 +526,8 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                     for v in self.daemon.clients.values()),
                 msg="supersocket missing"
             )
-            self.assertEqual(1, len(self.daemon.clients))
+            self.assertIn(scapy_socket_mock.return_value,
+                          self.daemon.read_sockets)
 
     def _test_init_success(self, scapy_socket_type, init_args=None):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -528,6 +550,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertFalse(any("supersocket" in v
                              for v in self.daemon.clients.values()),
                              msg="A supersocket was unexpectedly added")
+            self.assertEqual(2, len(self.daemon.read_sockets))
 
     def _test_init_oserror(self, scapy_socket_type, init_args=None):
         with unittest.mock.patch(

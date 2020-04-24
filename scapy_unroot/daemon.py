@@ -277,19 +277,26 @@ class UnrootDaemon:
                         sock.close()
                 else:
                     try:
+                        socket_found = False
                         for client in self.clients:
                             if sock == self.clients[client]["supersocket"]:
+                                socket_found = True
                                 ll, data_raw, ts = sock.recv(MTU)
-                                data = base64.encode(data_raw)
-                                sock.send(json.dumps({"recv": {
+                                self.logger.info(
+                                    "Sending {}({}) (ts={}) to {}"
+                                    .format(ll.__name__, data_raw,
+                                            ts, sock.raddr)
+                                )
+                                data = base64.b64encode(data_raw)
+                                client.send(json.dumps({"recv": {
                                     "type": ll.__name__,
-                                    "data": data_raw,
+                                    "data": data.decode(),
                                     "ts": float(ts) if ts is not None
                                     else ts,
                                 }}, separators=(",", ":")))
-                                continue
-                        self.logger.error("Unexpected socket selected {}"
-                                          .format(sock))
+                        if not socket_found:
+                            self.logger.error("Unexpected socket selected {}"
+                                              .format(sock))
                     except ConnectionError:
                         sock.close()
                         self.read_sockets.pop(sock, None)

@@ -689,6 +689,21 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertEqual("Unknown packet type uedfgnlxtoxf",
                              res["error"]["msg"])
 
+    def test_write__non_base64_data(self):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            self._test_init_success_w_sock("L3socket", sock)
+            sock.send(json.dumps({
+                "op": "write",
+                "data": "*#%/\\\0",
+            }).encode())
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.INVALID_DATA,
+                             res["error"]["type"])
+            self.assertEqual("data '*#%/\\\0' is not base64 encoded",
+                             res["error"]["msg"])
+
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:

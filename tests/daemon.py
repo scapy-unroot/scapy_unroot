@@ -732,6 +732,19 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertIn("success", res)
             supersocket.send.called_with(packet_type(test_data))
 
+    def test_write__oserror(self):
+        test_data = b"%\x8a:\xde\x14\rc\x97\x0fcI\xf08\xde\xf7\xa4\x98m\x04@"
+        req = {"data": base64.encodebytes(test_data).decode()}
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            supersocket, res = self._test_write_correct(
+                sock, req, {'send.side_effect': OSError(180, "Arghs!")}
+            )
+            supersocket.send.called_with(raw(test_data))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(180, res["error"]["errno"])
+            self.assertEqual("Arghs!", res["error"]["msg"])
+
     def test_write__success_raw(self):
         self._test_write_success()
 

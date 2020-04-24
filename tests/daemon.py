@@ -70,7 +70,9 @@ class TestRunDaemonBase(unittest.TestCase):
 
     @unittest.mock.patch('grp.getgrnam')
     def setUp(self, *args):
-        self.run_dir = tempfile.TemporaryDirectory()
+        self.run_dir = tempfile.TemporaryDirectory(
+            prefix="scapy_unroot.tests."
+        )
         self.assertTrue(os.path.exists(self.run_dir.name))
         self.daemon = scapy_unroot.daemon.UnrootDaemon(
             "group", run_dir=self.run_dir.name, daemonize=self.daemonize,
@@ -310,6 +312,25 @@ class TestRunDaemonized(TestRunDaemonBase):
         dup2.assert_not_called()
         # run loop was not started
         select.assert_not_called()
+
+
+@unittest.mock.patch('os.chmod')
+@unittest.mock.patch('os.chown')
+class TestRunDaemonUnexpectedSocket(TestRunDaemonBase):
+    @unittest.mock.patch('scapy.all.SuperSocket.select')
+    def test_run__unexpected_socket(self, select, chown, chmod):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            select.side_effect = [([sock], None), InterruptedError]
+            with self.assertRaises(InterruptedError):
+                with self.assertLogs('scapy_unroot.daemon', level='ERROR') \
+                     as cm:
+                    self.daemon.run()
+            # check if log error was printed correctly
+            self.assertTrue(any(
+                "Unexpected socket selected {}".format(sock) in line
+                for line in cm.output
+            ), msg="No warning about unknown socket {}".format(sock))
+        self.assertDictEqual({}, self.daemon.clients)
 
 
 class TestRunDaemonThreaded(TestRunDaemonBase):

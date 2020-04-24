@@ -403,6 +403,43 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             with self.assertRaises(socket.timeout):
                 sock.recv(MTU)
 
+    def test_init_unknown_type(self):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "thisdoesnotexist",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
+                             res["error"]["type"])
+            self.assertLess(0, len(res["error"]["msg"]))
+
+    @unittest.mock.patch("scapy.config.conf.L2socket",
+                         side_effect=OSError(133, "That error"))
+    def test_init_l2socket__oserror(self, L2socket):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L2socket",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(133, res["error"]["errno"])
+            self.assertEqual("That error", res["error"]["msg"])
+            L2socket.assert_called_once_with(blafoo="test", this="that")
+
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_init_l2socket__no_args(self, L2socket):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -434,3 +471,127 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertEqual(errno.EPERM, res["error"]["errno"])
             self.assertEqual(os.strerror(errno.EPERM), res["error"]["msg"])
             L2socket.assert_not_called()
+
+    @unittest.mock.patch("scapy.config.conf.L2socket")
+    def test_init_l2socket__other_arg(self, L2socket):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L2socket",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("success", res)
+            L2socket.assert_called_once_with(blafoo="test", this="that")
+
+    @unittest.mock.patch("scapy.config.conf.L2listen",
+                         side_effect=OSError(133, "That error"))
+    def test_init_l2listen__oserror(self, L2listen):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L2listen",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(133, res["error"]["errno"])
+            self.assertEqual("That error", res["error"]["msg"])
+            L2listen.assert_called_once_with(blafoo="test", this="that")
+
+    @unittest.mock.patch("scapy.config.conf.L2listen")
+    def test_init_l2listen__other_arg(self, L2listen):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L2listen",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("success", res)
+            L2listen.assert_called_once_with(blafoo="test", this="that")
+
+    @unittest.mock.patch("scapy.config.conf.L3socket",
+                         side_effect=OSError(133, "That error"))
+    def test_init_l3socket__oserror(self, L3socket):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L3socket",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(133, res["error"]["errno"])
+            self.assertEqual("That error", res["error"]["msg"])
+            L3socket.assert_called_once_with(blafoo="test", this="that")
+
+    @unittest.mock.patch("scapy.config.conf.L3socket")
+    def test_init_l3socket__other_arg(self, L3socket):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L3socket",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("success", res)
+            L3socket.assert_called_once_with(blafoo="test", this="that")
+
+    @unittest.mock.patch("scapy.config.conf.L3socket6",
+                         side_effect=OSError(133, "That error"))
+    def test_init_l3socket6__oserror(self, L3socket6):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L3socket6",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(133, res["error"]["errno"])
+            self.assertEqual("That error", res["error"]["msg"])
+            L3socket6.assert_called_once_with(blafoo="test", this="that")
+
+    @unittest.mock.patch("scapy.config.conf.L3socket6")
+    def test_init_l3socket6__other_arg(self, L3socket6):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "init",
+                "type": "L3socket6",
+                "args": {"blafoo": "test", "this": "that"},
+            }).encode())
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("success", res)
+            L3socket6.assert_called_once_with(blafoo="test", this="that")

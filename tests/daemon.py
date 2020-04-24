@@ -444,7 +444,8 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertIn("error", res)
             self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
                              res["error"]["type"])
-            self.assertLess(0, len(res["error"]["msg"]))
+            self.assertEqual("Unknown socket type 'thisdoesnotexist'",
+                             res["error"]["msg"])
 
     def _test_init_scapy_socket(self, sock, scapy_socket_type, init_args=None):
         sock.connect(self.daemon.socketname)

@@ -379,12 +379,6 @@ class TestRunDaemonThreaded(TestRunDaemonBase):
 class TestSocketInteraction(TestRunDaemonThreaded):
     blacklist = ["blacklisted_iface"]
 
-    def setUp(self):
-        super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-
     def test_accept(self):
         self.assertEqual(0, len(self.daemon.clients))
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:

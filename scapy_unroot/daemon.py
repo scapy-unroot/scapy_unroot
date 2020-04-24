@@ -232,13 +232,13 @@ class UnrootDaemon:
         os.chown(self.socketname, os.getuid(), self.group)
         os.chmod(self.socketname, 0o660)
         self.socket.listen(1024)
-        read_sockets = {self.socket: "server_socket"}
+        self.read_sockets = {self.socket: "server_socket"}
         while True:
-            sockets, _ = SuperSocket.select(read_sockets)
+            sockets, _ = SuperSocket.select(self.read_sockets)
             for sock in sockets:
                 if self.socket == sock:
                     connection, client_address = sock.accept()
-                    read_sockets[connection] = client_address
+                    self.read_sockets[connection] = client_address
                     self.clients[connection] = {
                         "address": client_address,
                     }
@@ -254,24 +254,25 @@ class UnrootDaemon:
                         except json.decoder.JSONDecodeError:
                             continue
                         if "init" in res:
-                            read_sockets[self.clients[sock]["supersocket"]] = \
-                                "supersocket.{}".format(
-                                    self.clients[sock]["address"]
-                                )
+                            self.read_sockets[
+                                self.clients[sock]["supersocket"]
+                            ] = "supersocket.{}".format(
+                                self.clients[sock]["address"]
+                            )
                         sock.send(
                             json.dumps(res, separators=(",", ":")).encode()
                         )
                         if "closed" in res:
-                            read_sockets.pop(
+                            self.read_sockets.pop(
                                 self.clients[sock].get("supersocket"),
                                 None
                             )
                             self.clients.pop(sock, None)
-                            read_sockets.pop(sock, None)
+                            self.read_sockets.pop(sock, None)
                             sock.close()
                     except ConnectionError:
                         self.clients.pop(sock, None)
-                        read_sockets.pop(sock, None)
+                        self.read_sockets.pop(sock, None)
                         sock.close()
                 else:
                     try:
@@ -290,7 +291,7 @@ class UnrootDaemon:
                                           .format(sock))
                     except ConnectionError:
                         sock.close()
-                        read_sockets.pop(sock, None)
+                        self.read_sockets.pop(sock, None)
                         for client in self.clients:
                             if sock == self.clients[client]["supersocket"]:
                                 self.clients.pop(client, None)

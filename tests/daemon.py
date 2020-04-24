@@ -11,6 +11,7 @@
 Tests for the daemon to enable using scapy without root.
 """
 
+import base64
 import errno
 import io
 import json
@@ -660,6 +661,22 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 "Error on closing {}".format(supersocket) in line
                 for line in cm.output
             ), msg="No warning about unknown socket {}".format(sock))
+
+    def test_write__uninitialized(self):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.daemon.socketname)
+            self.assertTrue(self.wait_for_next_select(1))
+            sock.send(json.dumps({
+                "op": "write",
+                "data": base64.encodebytes(b"test").decode(),
+            }).encode())
+            sock.settimeout(0.3)
+            res = json.loads(sock.recv(MTU))
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.UNINITILIZED,
+                             res["error"]["type"])
+            self.assertRegex(res["error"]["msg"],
+                             r"Socket for '.*' is uninitialized")
 
     @unittest.mock.patch("scapy.config.conf.L2socket")
     def test_connection_reset_client(self, L2socket):

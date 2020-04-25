@@ -12,11 +12,13 @@ Sockets to communicate with the daemon to enable using scapy without root.
 """
 
 import base64
+import functools
 import json
 import logging
+import os
 import socket
 
-from scapy.all import MTU, Scapy_Exception, SuperSocket
+from scapy.all import conf, MTU, Scapy_Exception, SuperSocket
 import scapy.layers.all
 
 from . import daemon
@@ -118,3 +120,16 @@ class ScapyUnrootSocket(SuperSocket):
         else:
             LL = scapy.layers.all.raw
         return LL, data, obj.get("ts")
+
+
+def configure_sockets(server_addr=None, connection_timeout=0.1):
+    if server_addr is None:
+        server_addr = os.path.join(daemon.RUN_DIR_DEFAULT, "server-socket")
+    conf.L2listen = functools.partial(ScapyUnrootSocket, server_addr,
+                                      "L2listen", connection_timeout)
+    conf.L2socket = functools.partial(ScapyUnrootSocket, server_addr,
+                                      "L2socket", connection_timeout)
+    conf.L3socket = functools.partial(ScapyUnrootSocket, server_addr,
+                                      "L3socket", connection_timeout)
+    conf.L3socket6 = functools.partial(ScapyUnrootSocket, server_addr,
+                                       "L3socket6", connection_timeout)

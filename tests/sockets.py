@@ -18,7 +18,7 @@ import socket
 import unittest
 import unittest.mock
 
-from scapy.all import Dot15d4, SixLoWPAN
+from scapy.all import Dot15d4, Scapy_Exception, SixLoWPAN
 
 import scapy_unroot.daemon
 import scapy_unroot.sockets
@@ -228,3 +228,9 @@ class TestSocketSend(TestSocketBase):
             self.sock.send(data)
         exp_req = {"op": "send", "data": base64.b64encode(data).decode()}
         self.socket_mock.send.called_with(json.dumps(exp_req))
+
+    @unittest.mock.patch("socket.socket")
+    def test_send__listen_socket(self, socket):
+        sock = self._test_init_success(socket, "L2listen")
+        with self.assertRaises(Scapy_Exception):
+            sock.send(b"abcdefg")

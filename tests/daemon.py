@@ -817,7 +817,7 @@ class TestRunDaemonReceive(TestRunDaemonBase):
                b"\x00\xd3\xdbM\x0c\xc2\xb4\xd3\x1d"
         ts = 5975408383.001369
         client = unittest.mock.MagicMock()
-        attrs = {'recv.return_value': (IP, data, ts)}
+        attrs = {'recv_raw.return_value': (IP, data, ts)}
         self.sock.configure_mock(**attrs)
         with self.assertLogs('scapy_unroot.daemon', level='INFO') as cm:
             self._run_daemon(client)
@@ -834,7 +834,7 @@ class TestRunDaemonReceive(TestRunDaemonBase):
 
     def test_receive__connection_error1(self):
         client = unittest.mock.MagicMock()
-        attrs = {'recv.side_effect': ConnectionError}
+        attrs = {'recv_raw.side_effect': ConnectionError}
         self.sock.configure_mock(**attrs)
         self._run_daemon(client)
         client.send.assert_not_called()
@@ -850,7 +850,7 @@ class TestRunDaemonReceive(TestRunDaemonBase):
         }
         client = unittest.mock.MagicMock(**attrs)
         attrs = {
-            'recv.return_value': (raw, data, ts),
+            'recv_raw.return_value': (raw, data, ts),
         }
         self.sock.configure_mock(**attrs)
         self._run_daemon(client)

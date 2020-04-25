@@ -283,7 +283,7 @@ class UnrootDaemon:
                         for client in self.clients:
                             if sock == self.clients[client]["supersocket"]:
                                 socket_found = True
-                                ll, data_raw, ts = sock.recv(MTU)
+                                ll, data_raw, ts = sock.recv_raw(MTU)
                                 self.logger.info(
                                     "Sending {}({}) (ts={}) to {}"
                                     .format(ll.__name__, data_raw,

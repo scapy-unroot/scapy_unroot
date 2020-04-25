@@ -11,11 +11,12 @@
 Sockets to communicate with the daemon to enable using scapy without root.
 """
 
+import base64
 import json
 import logging
 import socket
 
-from scapy.all import SuperSocket
+from scapy.all import Packet, SuperSocket
 
 from . import daemon
 
@@ -24,6 +25,7 @@ ERR_EXCEPTIONS = {
     daemon.UNKNOWN_OP: lambda msg="", **args: AttributeError(msg),
     daemon.UNKNOWN_TYPE: lambda msg="", **args: TypeError(msg),
     daemon.UNINITILIZED: lambda msg="", **args: RuntimeError(msg),
+    daemon.INVALID_DATA: lambda msg="", **args: ValueError(msg),
     daemon.OS: lambda errno=None, msg="", **args: OSError(errno, msg),
 }
 logger = logging.getLogger(__name__)
@@ -32,10 +34,12 @@ logger = logging.getLogger(__name__)
 class ScapyUnrootSocket(SuperSocket):
     desc = "read/write packets via the scapy_unroot daemon"
 
-    def _op(self, op, op_type=None, **args):
+    def _op(self, op, op_type=None, data=None, **args):
         req = {"op": op}
         if op_type is not None:
             req["type"] = op_type
+        if data is not None:
+            req["data"] = base64.b64encode(data).decode()
         if len(args) > 0:
             req["args"] = args
         self.ins.send(json.dumps(req, separators=(",", ":")).encode())
@@ -77,3 +81,12 @@ class ScapyUnrootSocket(SuperSocket):
                 logger.warning("Exception on sending close to daemon '{}'"
                                .format(e))
         super().close()
+
+    def send(self, x):
+        if isinstance(x, Packet):
+            op_type = type(x).__name__
+            data = bytes(x)
+        else:
+            op_type = None
+            data = x
+        return self._op("send", op_type=op_type, data=data)

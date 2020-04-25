@@ -9,7 +9,7 @@
 [codecov]: https://codecov.io/gh/miri64/scapy_unroot/branch/master/graph/badge.svg
 
 # scapy-unroot
-Daemon and tooling to enable using scapy without root.
+Daemon and tooling to enable using [scapy] without root.
 
 ## Installation
 `scapy_unroot` can be installed by just running
@@ -62,3 +62,5 @@ sudo scapy-unroot -h
 ```
 
 All arguments described above can be combined.
+
+[scapy]: https://scapy.net/

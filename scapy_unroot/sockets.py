@@ -39,7 +39,7 @@ class ScapyUnrootSocket(SuperSocket):
         if len(args) > 0:
             req["args"] = args
         self.ins.send(json.dumps(req, separators=(",", ":")).encode())
-        resp = json.loads(self.ins.recv(MTU))
+        resp = json.loads(self.ins.recv(daemon.DAEMON_MTU))
         if "error" in resp:
             err_type = resp["error"].get("type")
             if err_type in ERR_EXCEPTIONS:

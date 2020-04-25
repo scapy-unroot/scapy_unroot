@@ -36,6 +36,8 @@ UNINITILIZED = 3
 INVALID_DATA = 4
 OS = 5
 
+DAEMON_MTU = (4 * MTU) + len('{"op":"write","type":"","data":""}') + 100
+
 
 class UnrootDaemon:
     def __init__(self, group, daemonize=False, run_dir=RUN_DIR_DEFAULT,

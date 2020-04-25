@@ -14,7 +14,7 @@ import sys
 
 
 name = "scapy_unroot"
-version = "0.0.0a1"
+version = "0.1.0a1"
 description = "Daemon and tooling to enable using scapy without root."
 author = "Martine S. Lenders"
 author_email = "m.lenders@fu-berlin.de"

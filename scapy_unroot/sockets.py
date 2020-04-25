@@ -74,12 +74,13 @@ class ScapyUnrootSocket(SuperSocket):
         self._op("init", op_type=scapy_conf_type, **kwargs)
 
     def close(self):
-        if not self.ins.is_closed():
-            try:
-                self._op("close")
-            except Exception as e:
-                logger.warning("Exception on sending close to daemon '{}'"
-                               .format(e))
+        if self.closed:
+            return
+        try:
+            self._op("close")
+        except Exception as e:
+            logger.warning("Exception on sending close to daemon '{}'"
+                           .format(e))
         super().close()
 
     def send(self, x):

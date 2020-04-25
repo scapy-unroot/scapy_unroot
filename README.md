@@ -1,7 +1,10 @@
+[![Supported Python versions]](https://pypi.org/scapy-unroot)
+[![PyPI version]](https://badge.fury.io/py/scapy-unroot)
 [![Build Status]](https://travis-ci.com/miri64/scapy_unroot)
 [![codecov]](https://codecov.io/gh/miri64/scapy_unroot)
 
-
+[PyPI version]: https://badge.fury.io/py/scapy-unroot.svg
+[Supported Python versions]: https://img.shields.io/pypi/pyversions/scapy-unroot.svg
 [Build Status]: https://travis-ci.com/miri64/scapy_unroot.svg?branch=master
 [codecov]: https://codecov.io/gh/miri64/scapy_unroot/branch/master/graph/badge.svg
 

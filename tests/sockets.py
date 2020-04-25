@@ -147,7 +147,6 @@ class TestSocketClose(TestSocketBase):
     def _init_socket(self, socket_mock, scapy_conf_type,
                      recv_return_value='{"closed":""}'):
         sock = self._test_init_success(socket_mock, scapy_conf_type)
-        sock.ins.is_closed.return_value = False
         socket_mock.return_value.recv = lambda x: recv_return_value
         return sock
 

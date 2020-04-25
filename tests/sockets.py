@@ -21,8 +21,7 @@ import scapy_unroot.daemon
 import scapy_unroot.sockets
 
 
-@unittest.mock.patch("socket.socket")
-class TestSocketInit(unittest.TestCase):
+class TestSocketBase(unittest.TestCase):
     def setUp(self):
         # disable logger on default as the mocks cause
         # ScapyUnrootSocket.close() print warnings when object is destroye
@@ -49,6 +48,13 @@ class TestSocketInit(unittest.TestCase):
         )
         return sock
 
+    def _test_init_success(self, socket_mock, scapy_conf_type, **args):
+        return self._test_init(socket_mock, scapy_conf_type, b'{"success":0}',
+                               **args)
+
+
+@unittest.mock.patch("socket.socket")
+class TestSocketInit(TestSocketBase):
     def test_init__empty_response(self, socket_mock):
         with self.assertRaises(json.decoder.JSONDecodeError):
             self._test_init(socket_mock, "avxoxocx", b'')
@@ -120,10 +126,6 @@ class TestSocketInit(unittest.TestCase):
                          .format(scapy_unroot.daemon.OS)
             self._test_init(socket_mock, "8fr7swc", error_code)
 
-    def _test_init_success(self, socket_mock, scapy_conf_type, **args):
-        return self._test_init(socket_mock, scapy_conf_type, b'{"success":0}',
-                               **args)
-
     def test_init__success(self, socket_mock):
         sock = self._test_init_success(socket_mock, "L2socket")
         self.assertEqual(sock.ins, sock.outs)
@@ -136,29 +138,42 @@ class TestSocketInit(unittest.TestCase):
         self._test_init_success(socket_mock, "L2socket",
                                 that_argument=12345)
 
-    def test_close__success(self, socket_mock):
-        sock = self._test_init_success(socket_mock, "L2socket")
-        socket_mock.return_value.recv = lambda x: '{"closed":""}'
-        socket_mock.return_value.is_closed = lambda: False
+
+@unittest.mock.patch("socket.socket")
+class TestSocketClose(TestSocketBase):
+    def _init_socket(self, socket_mock, scapy_conf_type,
+                     recv_return_value='{"closed":""}'):
+        sock = self._test_init_success(socket_mock, scapy_conf_type)
+        sock.ins.is_closed.return_value = False
+        socket_mock.return_value.recv = lambda x: recv_return_value
+        return sock
+
+    def _test_close_success(self, socket_mock, scapy_conf_type):
+        sock = self._init_socket(socket_mock, scapy_conf_type)
         sock.close()
+        exp_req = {"op": "close"}
+        sock.ins.send.assert_called_with(
+            json.dumps(exp_req, separators=(",", ":")).encode()
+        )
         sock.ins.close.assert_called_once()
+        return sock
+
+    def test_close__success(self, socket_mock):
+        sock = self._test_close_success(socket_mock, "L2socket")
         sock.outs.close.assert_called_once()
 
     def test_close__success_listen_socket(self, socket_mock):
-        sock = self._test_init_success(socket_mock, "L2listen")
-        socket_mock.return_value.recv = lambda x: '{"closed":""}'
-        socket_mock.return_value.is_closed = lambda: False
-        sock.close()
-        sock.ins.close.assert_called_once()
+        sock = self._test_close_success(socket_mock, "L2listen")
         self.assertIsNone(sock.outs)
 
     def test_close__exception_on_close_op(self, socket_mock):
+        sock = self._init_socket(
+            socket_mock, "L3socket",
+            '{{"error":{{"type": {}}}}}'.format(
+                scapy_unroot.daemon.UNINITILIZED
+            )
+        )
         scapy_unroot.sockets.logger.disabled = False
-        sock = self._test_init_success(socket_mock, "L2socket")
-        socket_mock.return_value.recv = lambda x: \
-            '{{"error":{{"type": {}}}}}' \
-            .format(scapy_unroot.daemon.UNINITILIZED)
-        socket_mock.return_value.is_closed = lambda: False
         with self.assertLogs('scapy_unroot.sockets', level='WARNING') as cm:
             sock.close()
         self.assertIn("WARNING:scapy_unroot.sockets:Exception on sending "

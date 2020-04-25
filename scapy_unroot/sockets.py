@@ -16,7 +16,8 @@ import json
 import logging
 import socket
 
-from scapy.all import Packet, Scapy_Exception, SuperSocket
+from scapy.all import MTU, Scapy_Exception, SuperSocket
+import scapy.layers.all
 
 from . import daemon
 
@@ -42,8 +43,10 @@ class ScapyUnrootSocket(SuperSocket):
             req["data"] = base64.b64encode(data).decode()
         if len(args) > 0:
             req["args"] = args
+        self.ins.settimeout(self.connection_timeout)
         self.ins.send(json.dumps(req, separators=(",", ":")).encode())
         resp = json.loads(self.ins.recv(daemon.DAEMON_MTU))
+        self.ins.settimeout(None)
         if "error" in resp:
             err_type = resp["error"].get("type")
             if err_type in ERR_EXCEPTIONS:
@@ -63,13 +66,12 @@ class ScapyUnrootSocket(SuperSocket):
                  **kwargs):
         self.server_addr = server_addr
         self.scapy_conf_type = scapy_conf_type
+        self.connection_timeout = connection_timeout
         self.ins = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.ins.settimeout(connection_timeout)
         if "listen" in scapy_conf_type:
             self.outs = None
         else:
             self.outs = self.ins
-            self.outs.settimeout(connection_timeout)
         self.ins.connect(self.server_addr)
         self._op("init", op_type=scapy_conf_type, **kwargs)
 
@@ -87,10 +89,32 @@ class ScapyUnrootSocket(SuperSocket):
         if self.outs is None:
             raise Scapy_Exception("Can't send anything with conf.{} socket"
                                   .format(self.scapy_conf_type))
-        if isinstance(x, Packet):
+        if isinstance(x, scapy.layers.all.Packet):
             op_type = type(x).__name__
             data = bytes(x)
         else:
             op_type = None
             data = x
         return self._op("send", op_type=op_type, data=data)
+
+    def recv_raw(self, x=MTU):
+        x = int(x)
+        if x < 0:
+            raise ValueError("negative buffersize in recv")
+        res = {}
+        while "recv" not in res:
+            res = json.loads(self.ins.recv(daemon.DAEMON_MTU))
+            if "recv" not in res:
+                logger.error("Received unexpected JSON object {}".format(res))
+        obj = res["recv"]
+        if obj is None:
+            return scapy.layers.all.raw, b"", None
+        if "data" in obj:
+            data = base64.b64decode(obj["data"])[:x]
+        else:
+            data = b""
+        if "type" in obj:
+            LL = getattr(scapy.layers.all, obj["type"])
+        else:
+            LL = scapy.layers.all.raw
+        return LL, data, obj.get("ts")

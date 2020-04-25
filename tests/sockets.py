@@ -18,7 +18,8 @@ import socket
 import unittest
 import unittest.mock
 
-from scapy.all import Dot15d4, Scapy_Exception, SixLoWPAN
+from scapy.all import Dot15d4, Ether, IPv6, MTU, raw, \
+                      Scapy_Exception, SixLoWPAN
 
 import scapy_unroot.daemon
 import scapy_unroot.sockets
@@ -182,13 +183,15 @@ class TestSocketClose(TestSocketBase):
         sock.outs.close.assert_called_once()
 
 
-class TestSocketSend(TestSocketBase):
+class TestWithSocketInitialized(TestSocketBase):
     @unittest.mock.patch("socket.socket")
     def setUp(self, socket_mock):
         super().setUp()
         self.sock = self._test_init_success(socket_mock, "L3socket6")
         self.socket_mock = socket_mock
 
+
+class TestSocketSend(TestWithSocketInitialized):
     def _test_send_success(self, data, exp_type=None):
         self.socket_mock.return_value.recv = lambda x: \
             '{{"success":{}}}'.format(len(data))
@@ -231,3 +234,78 @@ class TestSocketSend(TestSocketBase):
         sock = self._test_init_success(socket, "L2listen")
         with self.assertRaises(Scapy_Exception):
             sock.send(b"abcdefg")
+
+
+class TestSocketRecv(TestWithSocketInitialized):
+    def test_recv_negative_bufsize(self):
+        with self.assertRaises(ValueError):
+            self.sock.recv_raw(-16632)
+
+    def test_recv_unexpected_object(self):
+        err_obj = '{"exegcooua": 215632}'
+        self.sock.ins.reset_mock()
+        self.socket_mock.return_value.recv = unittest.mock.MagicMock(
+            side_effect=[err_obj, b'{"recv":{}}']
+        )
+        with self.assertLogs('scapy_unroot.sockets', level='ERROR') as cm:
+            self.sock.recv_raw()
+        self.assertIn("ERROR:scapy_unroot.sockets:"
+                      "Received unexpected JSON object {}"
+                      .format(json.loads(err_obj)),
+                      cm.output)
+        self.assertEqual(2, self.sock.ins.recv.call_count)
+
+    def test_recv_null(self):
+        self.socket_mock.return_value.recv = lambda x: '{"recv":null}'
+        self.assertTupleEqual((raw, b"", None), self.sock.recv_raw())
+
+    def _test_recv_success(self, exp_type, incl_ts=True,
+                           type_str=None, data=None, ts=None,
+                           bufsize=MTU):
+        recv_return_value = {"recv": {}}
+        if type_str is not None:
+            recv_return_value["recv"]["type"] = type_str
+        if data is None:
+            exp_data = b""
+        else:
+            exp_data = data[:bufsize]
+            recv_return_value["recv"]["data"] = base64.b64encode(data).decode()
+        if incl_ts:
+            recv_return_value["recv"]["ts"] = ts
+        else:
+            ts = None
+
+        self.socket_mock.return_value.recv = lambda x: \
+            json.dumps(recv_return_value).encode()
+        self.sock.ins.reset_mock()
+        self.assertTupleEqual((exp_type, exp_data, ts),
+                              self.sock.recv_raw(bufsize))
+
+    def test_recv__success_raw(self):
+        data = b"Some test data"
+        ts = 105482430.244513
+        self._test_recv_success(raw, type_str="raw", data=data, ts=ts)
+
+    def test_recv__success_typed(self):
+        data = b"\xd1\xdb\xd3\n-P2jx\x0f\xe3\xb0mWY\xcb\xa6\x0e\x8d\xf7X\x1d" \
+               b"1t\xc0W8\xf3\xbec1\x1f\xf7\x8dO2\x089#\xf9"
+        self._test_recv_success(IPv6, type_str="IPv6", data=data)
+
+    def test_recv__success_no_type(self):
+        data = b"t\x18\xa0\x87\xcc\xde\x0f\x9a>\xa6\x18\xe2\xc5>\xfbL"
+        self._test_recv_success(raw, data=data)
+
+    def test_recv__success_no_ts(self):
+        data = b"K7\xb5\x99'\\\xad\x07\xc4A}\xbeB\xcd\xab\x9d"
+        self._test_recv_success(Ether, type_str="Ether", data=data,
+                                incl_ts=False)
+
+    def test_recv__success_no_data(self):
+        ts = 660420410.543053
+        self._test_recv_success(raw, type_str="raw", ts=ts, incl_ts=False)
+
+    def test_recv__small_bufsize(self):
+        data = b"F\xd4\xcd`vk\x06X\x06\xde\x97n?\x08@\x9f"
+        ts = 229182428.38868
+        self._test_recv_success(Ether, type_str="Ether", data=data,
+                                ts=ts, bufsize=3)

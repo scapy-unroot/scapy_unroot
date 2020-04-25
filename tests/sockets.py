@@ -18,7 +18,7 @@ import socket
 import unittest
 import unittest.mock
 
-from scapy.all import Dot15d4, Ether, IPv6, MTU, raw, \
+from scapy.all import conf, Dot15d4, Ether, IPv6, MTU, raw, \
                       Scapy_Exception, SixLoWPAN
 
 import scapy_unroot.daemon
@@ -309,3 +309,22 @@ class TestSocketRecv(TestWithSocketInitialized):
         ts = 229182428.38868
         self._test_recv_success(Ether, type_str="Ether", data=data,
                                 ts=ts, bufsize=3)
+
+
+@unittest.mock.patch("socket.socket")
+class TestConfigureSockets(unittest.TestCase):
+    def test_configure_sockets(self, socket_mock):
+        socket_mock.return_value.recv = lambda x: '{"success":0}'
+        scapy_unroot.sockets.configure_sockets()
+        self.assertEqual("L2listen", conf.L2listen().scapy_conf_type)
+        self.assertEqual("L2socket", conf.L2socket().scapy_conf_type)
+        self.assertEqual("L3socket", conf.L3socket().scapy_conf_type)
+        self.assertEqual("L3socket6", conf.L3socket6().scapy_conf_type)
+
+    def test_configure_sockets_with_params(self, socket_mock):
+        socket_mock.return_value.recv = lambda x: '{"success":0}'
+        scapy_unroot.sockets.configure_sockets("foobar", 34.874)
+        res = conf.L3socket6()
+        self.assertEqual("L3socket6", res.scapy_conf_type)
+        self.assertEqual("foobar", res.server_addr)
+        self.assertEqual(34.874, res.connection_timeout)

@@ -21,17 +21,26 @@ author_email = "m.lenders@fu-berlin.de"
 url = "https://github.com/miri64/scapy-unroot"
 
 
+def with_directory(filename):
+    return os.path.join(os.path.dirname(sys.argv[0]), filename)
+
+
 def get_requirements():
-    with open(os.path.join(os.path.dirname(sys.argv[0]),
-                           "requirements.txt")) as req_file:
+    with open(with_directory("requirements.txt")) as req_file:
         for line in req_file:
             yield line.strip()
 
+
+def get_readme():
+    with open(with_directory("README.md")) as readme:
+        return readme.read()
 
 setup(
     name=name,
     version=version,
     description=description,
+    long_description=get_readme(),
+    long_description_content_type="text/markdown",
     packages=find_packages(exclude=("tests",)),
 
     author=author,

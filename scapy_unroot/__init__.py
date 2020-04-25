@@ -6,3 +6,5 @@
 # This file is subject to the terms and conditions of the GNU General Public
 # License v3.0. See the file LICENSE in the top level directory for more
 # details.
+
+from .sockets import configure_sockets  # noqa: F401

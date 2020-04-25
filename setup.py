@@ -32,7 +32,7 @@ setup(
     name=name,
     version=version,
     description=description,
-    packages=find_packages(),
+    packages=find_packages(exclude=("tests",)),
 
     author=author,
     author_email=author_email,

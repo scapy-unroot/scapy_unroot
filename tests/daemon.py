@@ -30,6 +30,7 @@ import scapy_unroot.daemon
 
 
 MOCK_FD = 7
+CONNECTION_TIMEOUT = 0.005
 
 
 @unittest.mock.patch('grp.getgrnam')
@@ -438,7 +439,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertTrue(self.wait_for_next_select(1))
             sock.send(b"{,")
             self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
+            sock.settimeout(CONNECTION_TIMEOUT)
             # broken JSON is silently ignored
             with self.assertRaises(socket.timeout):
                 sock.recv(MTU)
@@ -457,7 +458,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 "args": {"blafoo": "test", "this": "that"},
             }).encode())
             self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
+            sock.settimeout(CONNECTION_TIMEOUT)
             res = json.loads(sock.recv(MTU))
             self.assertIn("error", res)
             self.assertEqual(scapy_unroot.daemon.UNKNOWN_OP,
@@ -479,7 +480,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 "args": {"blafoo": "test", "this": "that"},
             }).encode())
             self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
+            sock.settimeout(CONNECTION_TIMEOUT)
             res = json.loads(sock.recv(MTU))
             self.assertIn("error", res)
             self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
@@ -505,7 +506,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
         self.assertEqual(1, len(self.daemon.clients))
         self.assertEqual(2, len(self.daemon.read_sockets))
         self.assertTrue(self.wait_for_next_select(1))
-        sock.settimeout(0.3)
+        sock.settimeout(CONNECTION_TIMEOUT)
         res = json.loads(sock.recv(MTU))
         self.assertIn("error", res)
         self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
@@ -521,7 +522,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self._test_init_scapy_socket(sock, scapy_socket_type,
                                          init_args)
             self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
+            sock.settimeout(CONNECTION_TIMEOUT)
             res = json.loads(sock.recv(MTU))
             self.assertIn("success", res)
             if init_args is None:
@@ -548,7 +549,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self._test_init_scapy_socket(sock, scapy_socket_type,
                                          init_args)
             self.assertTrue(self.wait_for_next_select(1))
-            sock.settimeout(0.3)
+            sock.settimeout(CONNECTION_TIMEOUT)
             res = json.loads(sock.recv(MTU))
             self.assertIn("error", res)
             self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
@@ -697,7 +698,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 "op": "send",
                 "data": base64.b64encode(b"test").decode(),
             }).encode())
-            sock.settimeout(0.3)
+            sock.settimeout(CONNECTION_TIMEOUT)
             res = json.loads(sock.recv(MTU))
             self.assertIn("error", res)
             self.assertEqual(scapy_unroot.daemon.UNINITILIZED,
@@ -713,7 +714,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 "type": "uedfgnlxtoxf",
                 "data": base64.b64encode(b"test").decode(),
             }).encode())
-            sock.settimeout(0.3)
+            sock.settimeout(CONNECTION_TIMEOUT)
             res = json.loads(sock.recv(MTU))
             self.assertIn("error", res)
             self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
@@ -728,7 +729,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 "op": "send",
                 "data": "*#%/\\\0",
             }).encode())
-            sock.settimeout(0.3)
+            sock.settimeout(CONNECTION_TIMEOUT)
             res = json.loads(sock.recv(MTU))
             self.assertIn("error", res)
             self.assertEqual(scapy_unroot.daemon.INVALID_DATA,
@@ -745,7 +746,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             supersocket.configure_mock(**mock_attrs)
         req["op"] = "send"
         sock.send(json.dumps(req).encode())
-        sock.settimeout(0.3)
+        sock.settimeout(CONNECTION_TIMEOUT)
         res = json.loads(sock.recv(MTU))
         return supersocket, res
 

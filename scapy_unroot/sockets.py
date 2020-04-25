@@ -15,7 +15,7 @@ import json
 import logging
 import socket
 
-from scapy.all import MTU, SuperSocket
+from scapy.all import SuperSocket
 
 from . import daemon
 

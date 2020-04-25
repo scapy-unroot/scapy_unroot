@@ -24,7 +24,7 @@ import threading
 import unittest
 import unittest.mock
 
-from scapy.all import conf, Ether, IP, MTU, raw, SimpleSocket, SuperSocket
+from scapy.all import conf, Ether, IP, raw, SimpleSocket, SuperSocket
 
 import scapy_unroot.daemon
 

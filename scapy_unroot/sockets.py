@@ -16,7 +16,7 @@ import json
 import logging
 import socket
 
-from scapy.all import Packet, SuperSocket
+from scapy.all import Packet, Scapy_Exception, SuperSocket
 
 from . import daemon
 
@@ -84,6 +84,9 @@ class ScapyUnrootSocket(SuperSocket):
         super().close()
 
     def send(self, x):
+        if self.outs is None:
+            raise Scapy_Exception("Can't send anything with conf.{} socket"
+                                  .format(self.scapy_conf_type))
         if isinstance(x, Packet):
             op_type = type(x).__name__
             data = bytes(x)

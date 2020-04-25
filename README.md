@@ -41,6 +41,9 @@ By default, all files related to `scapy_unroot` are managed in the directory
 sudo scapy-unroot --run-dir /tmp scapy
 ```
 
+The UNIX domain socket to communicate with the daemon will be created under the
+name `server-socket` in that directory.
+
 Network interfaces that users of `scapy_unroot` should not be able to send over
 or sniff on can be blacklisted using the `-b` / `--interface-blacklist`
 argument. Multiple interfaces can be provided:
@@ -62,5 +65,20 @@ sudo scapy-unroot -h
 ```
 
 All arguments described above can be combined.
+
+### Configuring scapy to communicate with the daemon
+Before sending or sniffing with scapy, just do
+
+```py
+from scapy_unroot import configure_sockets
+
+configure_sockets()
+```
+
+You can provide a different server address by the _server_addr_ argument. The
+default is `/var/run/scapy_unroot/server-socket`.
+
+You can also configure the timeout for waiting for a reply from the server using
+the _connection_timeout_ argument.
 
 [scapy]: https://scapy.net/

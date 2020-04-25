@@ -28,10 +28,7 @@ class TestSocketBase(unittest.TestCase):
     def setUp(self):
         # disable logger on default as the mocks cause
         # ScapyUnrootSocket.close() print warnings when object is destroye
-        scapy_unroot.sockets.logger.disabled = True
-
-    def tearDown(self):
-        scapy_unroot.sockets.logger.disabled = False
+        scapy_unroot.sockets.logger.setLevel("CRITICAL")
 
     def _test_init(self, socket_mock, scapy_conf_type, recv_data, **args):
         socket_mock.return_value.recv = lambda x: recv_data

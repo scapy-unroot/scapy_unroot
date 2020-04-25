@@ -23,6 +23,14 @@ import scapy_unroot.sockets
 
 @unittest.mock.patch("socket.socket")
 class TestSocketInit(unittest.TestCase):
+    def setUp(self):
+        # disable logger on default as the mocks cause
+        # ScapyUnrootSocket.close() print warnings when object is destroye
+        scapy_unroot.sockets.logger.disabled = True
+
+    def tearDown(self):
+        scapy_unroot.sockets.logger.disabled = False
+
     def _test_init(self, socket_mock, scapy_conf_type, recv_data, **args):
         socket_mock.return_value.recv = lambda x: recv_data
         sock = scapy_unroot.sockets.ScapyUnrootSocket(
@@ -127,3 +135,34 @@ class TestSocketInit(unittest.TestCase):
     def test_init__success_with_args(self, socket_mock):
         self._test_init_success(socket_mock, "L2socket",
                                 that_argument=12345)
+
+    def test_close__success(self, socket_mock):
+        sock = self._test_init_success(socket_mock, "L2socket")
+        socket_mock.return_value.recv = lambda x: '{"closed":""}'
+        socket_mock.return_value.is_closed = lambda: False
+        sock.close()
+        sock.ins.close.assert_called_once()
+        sock.outs.close.assert_called_once()
+
+    def test_close__success_listen_socket(self, socket_mock):
+        sock = self._test_init_success(socket_mock, "L2listen")
+        socket_mock.return_value.recv = lambda x: '{"closed":""}'
+        socket_mock.return_value.is_closed = lambda: False
+        sock.close()
+        sock.ins.close.assert_called_once()
+        self.assertIsNone(sock.outs)
+
+    def test_close__exception_on_close_op(self, socket_mock):
+        scapy_unroot.sockets.logger.disabled = False
+        sock = self._test_init_success(socket_mock, "L2socket")
+        socket_mock.return_value.recv = lambda x: \
+            '{{"error":{{"type": {}}}}}' \
+            .format(scapy_unroot.daemon.UNINITILIZED)
+        socket_mock.return_value.is_closed = lambda: False
+        with self.assertLogs('scapy_unroot.sockets', level='WARNING') as cm:
+            sock.close()
+        self.assertIn("WARNING:scapy_unroot.sockets:Exception on sending "
+                      "close to daemon ''",
+                      cm.output)
+        sock.ins.close.assert_called_once()
+        sock.outs.close.assert_called_once()

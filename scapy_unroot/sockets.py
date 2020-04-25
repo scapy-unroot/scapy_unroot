@@ -12,6 +12,7 @@ Sockets to communicate with the daemon to enable using scapy without root.
 """
 
 import json
+import logging
 import socket
 
 from scapy.all import MTU, SuperSocket
@@ -22,8 +23,10 @@ from . import daemon
 ERR_EXCEPTIONS = {
     daemon.UNKNOWN_OP: lambda msg="", **args: AttributeError(msg),
     daemon.UNKNOWN_TYPE: lambda msg="", **args: TypeError(msg),
+    daemon.UNINITILIZED: lambda msg="", **args: RuntimeError(msg),
     daemon.OS: lambda errno=None, msg="", **args: OSError(errno, msg),
 }
+logger = logging.getLogger(__name__)
 
 
 class ScapyUnrootSocket(SuperSocket):
@@ -46,6 +49,8 @@ class ScapyUnrootSocket(SuperSocket):
                                    .format(err_type))
         elif "success" in resp:
             return resp["success"]
+        elif "closed" in resp:
+            return 0
         else:
             raise RuntimeError("Unexpected response from daemon '{}'"
                                .format(self.server_addr))
@@ -63,3 +68,12 @@ class ScapyUnrootSocket(SuperSocket):
             self.outs.settimeout(connection_timeout)
         self.ins.connect(self.server_addr)
         self._op("init", op_type=scapy_conf_type, **kwargs)
+
+    def close(self):
+        if not self.ins.is_closed():
+            try:
+                self._op("close")
+            except Exception as e:
+                logger.warning("Exception on sending close to daemon '{}'"
+                               .format(e))
+        super().close()

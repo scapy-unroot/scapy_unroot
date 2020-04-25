@@ -12,10 +12,13 @@ Tests for the sockets to communicate with the daemon to enable using scapy
 without root.
 """
 
+import base64
 import json
 import socket
 import unittest
 import unittest.mock
+
+from scapy.all import Dot15d4, SixLoWPAN
 
 import scapy_unroot.daemon
 import scapy_unroot.sockets
@@ -181,3 +184,48 @@ class TestSocketClose(TestSocketBase):
                       cm.output)
         sock.ins.close.assert_called_once()
         sock.outs.close.assert_called_once()
+
+
+class TestSocketSend(TestSocketBase):
+    @unittest.mock.patch("socket.socket")
+    def setUp(self, socket_mock):
+        super().setUp()
+        self.sock = self._test_init_success(socket_mock, "L3socket6")
+        self.socket_mock = socket_mock
+
+    def _test_send_success(self, data, exp_type=None):
+        self.socket_mock.return_value.recv = lambda x: \
+            '{{"success":{}}}'.format(len(data))
+        self.assertEqual(len(data), self.sock.send(data))
+        exp_req = {"op": "send"}
+        if exp_type is not None:
+            exp_req["type"] = exp_type
+            data = bytes(data)
+        exp_req["data"] = base64.b64encode(data).decode()
+        self.socket_mock.send.called_with(json.dumps(exp_req))
+
+    def test_send__success_raw(self):
+        self._test_send_success(b"hallo")
+
+    def test_send__success_packet(self):
+        self._test_send_success(Dot15d4() / SixLoWPAN(), "Dot15d4")
+
+    def test_send__invalid_data(self):
+        data = b"Some test data"
+        self.socket_mock.return_value.recv = lambda x: \
+            '{{"error":{{"type": {}, "msg":"This is only a test"}}}}' \
+            .format(scapy_unroot.daemon.INVALID_DATA)
+        with self.assertRaisesRegex(ValueError, "^This is only a test$"):
+            self.sock.send(data)
+        exp_req = {"op": "send", "data": base64.b64encode(data).decode()}
+        self.socket_mock.send.called_with(json.dumps(exp_req))
+
+    def test_send__invalid_data_no_msg(self):
+        data = b"Some test data"
+        self.socket_mock.return_value.recv = lambda x: \
+            '{{"error":{{"type": {}}}}}' \
+            .format(scapy_unroot.daemon.INVALID_DATA)
+        with self.assertRaisesRegex(ValueError, "^$"):
+            self.sock.send(data)
+        exp_req = {"op": "send", "data": base64.b64encode(data).decode()}
+        self.socket_mock.send.called_with(json.dumps(exp_req))

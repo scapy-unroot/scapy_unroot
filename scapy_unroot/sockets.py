@@ -125,11 +125,7 @@ class ScapyUnrootSocket(SuperSocket):
 def configure_sockets(server_addr=None, connection_timeout=0.1):
     if server_addr is None:
         server_addr = os.path.join(daemon.RUN_DIR_DEFAULT, "server-socket")
-    conf.L2listen = functools.partial(ScapyUnrootSocket, server_addr,
-                                      "L2listen", connection_timeout)
-    conf.L2socket = functools.partial(ScapyUnrootSocket, server_addr,
-                                      "L2socket", connection_timeout)
-    conf.L3socket = functools.partial(ScapyUnrootSocket, server_addr,
-                                      "L3socket", connection_timeout)
-    conf.L3socket6 = functools.partial(ScapyUnrootSocket, server_addr,
-                                       "L3socket6", connection_timeout)
+    for socket_conf in ["L2listen", "L2socket", "L3socket", "L3socket6"]:
+        setattr(conf, socket_conf,
+                functools.partial(ScapyUnrootSocket, server_addr,
+                                  socket_conf, connection_timeout))

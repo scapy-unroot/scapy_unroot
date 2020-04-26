@@ -121,6 +121,13 @@ class ScapyUnrootSocket(SuperSocket):
             LL = scapy.layers.all.raw
         return LL, data, obj.get("ts")
 
+    # for some reason this static method is used as bound method within scapy
+    # so explicitly inherit from SuperSocket
+    @staticmethod
+    def select(*args, **kwargs):
+        res = SuperSocket.select(*args, **kwargs)
+        return res
+
 
 def configure_sockets(server_addr=None, connection_timeout=0.1):
     if server_addr is None:

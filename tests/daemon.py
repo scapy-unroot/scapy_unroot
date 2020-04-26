@@ -829,7 +829,7 @@ class TestRunDaemonReceive(TestRunDaemonBase):
         ))
         client.send.assert_called_once_with(
             '{{"recv":{{"type":"IP","data":"{}","ts":{}}}}}'
-            .format(base64.b64encode(data).decode(), ts)
+            .format(base64.b64encode(data).decode(), ts).encode()
         )
 
     def test_receive__connection_error1(self):
@@ -856,7 +856,7 @@ class TestRunDaemonReceive(TestRunDaemonBase):
         self._run_daemon(client)
         client.send.assert_called_once_with(
             '{{"recv":{{"type":"raw","data":"{}","ts":{}}}}}'
-            .format(base64.b64encode(data).decode(), ts)
+            .format(base64.b64encode(data).decode(), ts).encode()
         )
         self.assertNotIn(client, self.daemon.clients)
         self.assertEqual(1, len(self.daemon.read_sockets))

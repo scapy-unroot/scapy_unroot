@@ -287,7 +287,7 @@ class UnrootDaemon:
                                 self.logger.info(
                                     "Sending {}({}) (ts={}) to {}"
                                     .format(ll.__name__, data_raw,
-                                            ts, sock.raddr)
+                                            ts, client.getpeername())
                                 )
                                 data = base64.b64encode(data_raw)
                                 client.send(json.dumps({"recv": {
@@ -295,7 +295,7 @@ class UnrootDaemon:
                                     "data": data.decode(),
                                     "ts": float(ts) if ts is not None
                                     else ts,
-                                }}, separators=(",", ":")))
+                                }}, separators=(",", ":")).encode())
                         if not socket_found:
                             self.logger.error("Unexpected socket selected {}"
                                               .format(sock))

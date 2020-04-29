@@ -258,7 +258,7 @@ class UnrootDaemonClient:
     def is_supersocket_initialized(self):
         return self.supersocket is not None
 
-    def init_supersocket(self, type, args=None):
+    def init_supersocket(self, type=None, args=None):
         if type in ["L2listen", "L2socket", "L3socket", "L3socket6"]:
             if args is None:
                 args = {}

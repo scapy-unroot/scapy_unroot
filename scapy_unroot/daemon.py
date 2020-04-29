@@ -118,6 +118,41 @@ class UnrootDaemon:
            os.path.exists(self.socketname):
             os.unlink(self.socketname)
 
+    @staticmethod
+    def _os_error_resp(error):
+        if isinstance(error, OSError):
+            return {"error": {
+                "type": OS,
+                "msg": error.strerror,
+                "errno": error.errno,
+            }}
+        else:
+            return {"error": {
+                "type": OS,
+                "msg": os.strerror(error),
+                "errno": error,
+            }}
+
+    @staticmethod
+    def _error_resp(type, msg):
+        return {"error": locals()}
+
+    @classmethod
+    def _exc_to_error_resp(cls, type, exc):
+        return cls._error_resp(type, str(exc))
+
+    @staticmethod
+    def _success_resp(res=0):
+        return {"success": res}
+
+    @staticmethod
+    def _closed_resp(socket):
+        return {"closed": str(socket["address"])}
+
+    @staticmethod
+    def _is_closed_resp(resp):
+        return "closed" in resp
+
     def _eval_data(self, data, socket):
         op = data.get("op")
         if op == "init":
@@ -126,88 +161,48 @@ class UnrootDaemon:
                 args = data.get("args", {})
                 iface = args.get("iface", conf.iface)
                 if iface in self.iface_blacklist:
-                    return {
-                        "error": {
-                            "type": OS,
-                            "msg": os.strerror(errno.EPERM),
-                            "errno": errno.EPERM,
-                        }
-                    }
+                    return self._os_error_resp(errno.EPERM)
                 try:
                     supersocket = getattr(conf, data["type"])(**args)
                 except TypeError as e:
-                    return {
-                        "error": {
-                            "type": UNKNOWN_TYPE,
-                            "msg": str(e),
-                        }
-                    }
+                    return self._exc_to_error_resp(UNKNOWN_TYPE, e)
                 except OSError as e:
-                    return {
-                        "error": {
-                            "type": OS,
-                            "msg": e.strerror,
-                            "errno": e.errno,
-                        }
-                    }
+                    return self._os_error_resp(e)
                 else:
                     socket["supersocket"] = supersocket
                     self.read_sockets[supersocket] = "supersocket.{}" \
                         .format(socket["address"])
-                    return {
-                        "success": 0
-                    }
+                    return self._success_resp()
             else:
-                return {
-                    "error": {
-                        "type": UNKNOWN_TYPE,
-                        "msg": "Unknown socket type '{}'".format(
-                            data.get("type")
-                        ),
-                    }
-                }
+                return self._error_resp(
+                    UNKNOWN_TYPE,
+                    "Unknown socket type '{}'".format(data.get("type"))
+                )
         elif op == "send":
             if "supersocket" not in socket:
-                return {
-                    "error": {
-                        "type": UNINITILIZED,
-                        "msg": "Socket for '{}' is uninitialized".format(
-                            socket["address"]
-                        ),
-                    }
-                }
+                return self._error_resp(
+                    UNINITILIZED,
+                    "Socket for '{}' is uninitialized"
+                    .format(socket["address"])
+                )
             type = data.get("type", "raw")
+            data = data.get("data", "")
             try:
-                bytes = base64.b64decode(data.get("data", "").encode())
+                bytes = base64.b64decode(data.encode())
             except binascii.Error:
-                return {
-                    "error": {
-                        "type": INVALID_DATA,
-                        "msg": "data '{}' is not base64 encoded".format(
-                            data.get("data", "")
-                        ),
-                    }
-                }
+                return self._error_resp(
+                    INVALID_DATA,
+                    "data '{}' is not base64 encoded".format(data)
+                )
             if not hasattr(layers, type):
-                return {
-                    "error": {
-                        "type": UNKNOWN_TYPE,
-                        "msg": "Unknown packet type {}".format(
-                            data.get("type")
-                        ),
-                    }
-                }
+                return self._error_resp(
+                    UNKNOWN_TYPE, "Unknown packet type {}".format(type)
+                )
             try:
                 res = socket["supersocket"].send(getattr(layers, type)(bytes))
-                return {"success": res}
+                return self._success_resp(res)
             except OSError as e:
-                return {
-                    "error": {
-                        "type": OS,
-                        "msg": e.strerror,
-                        "errno": e.errno,
-                    }
-                }
+                return self._os_error_resp(e)
         elif op == "close":
             if "supersocket" in socket:
                 try:
@@ -215,16 +210,11 @@ class UnrootDaemon:
                 except Exception as exc:
                     self.logger.warning("Error on closing {} ({})"
                                         .format(socket["supersocket"], exc))
-            return {"closed": str(socket["address"])}
+            return self._closed_resp(socket)
         else:
-            return {
-                "error": {
-                    "type": UNKNOWN_OP,
-                    "msg": "Operation '{}' unknown".format(
-                        data.get("op")
-                    ),
-                }
-            }
+            return self._error_resp(
+                UNKNOWN_OP, "Operation '{}' unknown".format(data.get("op"))
+            )
 
     def run(self):
         if not os.path.exists(self.run_dir):
@@ -260,7 +250,7 @@ class UnrootDaemon:
                         sock.send(
                             json.dumps(res, separators=(",", ":")).encode()
                         )
-                        if "closed" in res:
+                        if self._is_closed_resp(res):
                             self.read_sockets.pop(
                                 self.clients[sock].get("supersocket"),
                                 None

@@ -107,13 +107,14 @@ class TestRunDaemonSetup(TestRunDaemonBase):
         self.daemon.socket.listen.assert_called_once()
 
     @unittest.mock.patch('os.path.exists', return_value=True)
-    def test_run__run_dir_exists(self, path_exists, makedirs, socket, chmod,
-                                 chown, select):
+    @unittest.mock.patch('os.unlink')
+    def test_run__run_dir_exists(self, unlink, path_exists, makedirs, socket,
+                                 chmod, chown, select):
         self.assertIsNone(self.daemon.socket)
         # triggered by select mock to interrupt infinite loop
         with self.assertRaises(InterruptedError):
             self.daemon.run()
-        path_exists.assert_called_with(self.run_dir.name)
+        path_exists.assert_any_call(self.run_dir.name)
         makedirs.assert_not_called()
         self._assert_socket_correct(chown, chmod)
         select.assert_called_with(self.daemon.read_sockets)

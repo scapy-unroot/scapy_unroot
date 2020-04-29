@@ -1,4 +1,4 @@
-[![Supported Python versions]](https://pypi.org/scapy-unroot)
+[![Supported Python versions]](https://pypi.org/project/scapy-unroot)
 [![PyPI version]](https://badge.fury.io/py/scapy-unroot)
 [![Build Status]](https://travis-ci.com/miri64/scapy_unroot)
 [![codecov]](https://codecov.io/gh/miri64/scapy_unroot)

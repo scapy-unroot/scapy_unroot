@@ -247,10 +247,14 @@ class UnrootDaemon:
                     try:
                         b = sock.recv(DAEMON_MTU)
                         if len(b) == 0:
+                            # don't bother trying to parse this
                             continue
                         try:
                             data = json.loads(b)
                         except json.decoder.JSONDecodeError:
+                            # silently ignore JSON decode errors as empty
+                            # messages are exchanged between UNIX domain stream
+                            # sockets all the time
                             continue
                         res = self._eval_data(data, self.clients[sock])
                         sock.send(

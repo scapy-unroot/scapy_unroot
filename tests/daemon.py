@@ -530,8 +530,8 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             else:
                 scapy_socket_mock.assert_called_once_with(**init_args)
             self.assertTrue(
-                any("supersocket" in v and
-                    v["supersocket"] is scapy_socket_mock.return_value
+                any(v.is_supersocket_initialized() and
+                    v.supersocket is scapy_socket_mock.return_value
                     for v in self.daemon.clients.values()),
                 msg="supersocket missing"
             )
@@ -556,7 +556,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                              res["error"]["type"])
             self.assertIn("__init__() got an unexpected keyword argument ",
                           res["error"]["msg"])
-            self.assertFalse(any("supersocket" in v
+            self.assertFalse(any(v.is_supersocket_initialized()
                              for v in self.daemon.clients.values()),
                              msg="A supersocket was unexpectedly added")
             self.assertEqual(2, len(self.daemon.read_sockets))
@@ -576,9 +576,9 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                     scapy_socket_mock.assert_called_once_with()
                 else:
                     scapy_socket_mock.assert_called_once_with(**init_args)
-                self.assertFalse(any("supersocket" in v
-                                 for v in self.daemon.clients.values()),
-                                 msg="A supersocket was unexpectedly added")
+            self.assertFalse(any(v.is_supersocket_initialized()
+                             for v in self.daemon.clients.values()),
+                             msg="A supersocket was unexpectedly added")
 
     def _test_init_blacklisted_iface(self, scapy_socket_type):
         with unittest.mock.patch(
@@ -592,7 +592,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 self.assertEqual(errno.EPERM, res["error"]["errno"])
                 self.assertEqual(os.strerror(errno.EPERM), res["error"]["msg"])
                 scapy_socket_mock.assert_not_called()
-                self.assertFalse(any("supersocket" in v
+                self.assertFalse(any(v.is_supersocket_initialized()
                                  for v in self.daemon.clients.values()),
                                  msg="A supersocket was unexpectedly added")
 
@@ -673,9 +673,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
     def test_broken_close(self):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             self._test_init_success_w_sock("L2socket", sock)
-            supersocket = next(iter(self.daemon.clients.values()))[
-                "supersocket"
-            ]
+            supersocket = next(iter(self.daemon.clients.values())).supersocket
             attrs = {'close.side_effect': Exception("Testing")}
             supersocket.configure_mock(**attrs)
             with self.assertLogs('scapy_unroot.daemon', level='WARNING') as cm:
@@ -739,9 +737,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
 
     def _test_send_correct(self, sock, req, mock_attrs=None):
         self._test_init_success_w_sock("L3socket6", sock)
-        supersocket = next(iter(self.daemon.clients.values()))[
-            "supersocket"
-        ]
+        supersocket = next(iter(self.daemon.clients.values())).supersocket
         if mock_attrs is not None:
             supersocket.configure_mock(**mock_attrs)
         req["op"] = "send"
@@ -808,7 +804,11 @@ class TestRunDaemonReceive(TestRunDaemonBase):
     @unittest.mock.patch('scapy.all.SuperSocket.select')
     def _run_daemon(self, client, select, *args):
         select.side_effect = [([self.sock], None), InterruptedError]
-        self.daemon.clients[client] = {"supersocket": self.sock}
+        the_client = scapy_unroot.daemon.UnrootDaemonClient(self.daemon,
+                                                            self.sock,
+                                                            "blafoo")
+        the_client.supersocket = self.sock
+        self.daemon.clients[client] = the_client
         with self.assertRaises(InterruptedError):
             self.daemon.run()
 
@@ -861,3 +861,171 @@ class TestRunDaemonReceive(TestRunDaemonBase):
         self.assertNotIn(client, self.daemon.clients)
         self.assertEqual(1, len(self.daemon.read_sockets))
         self.assertIn(self.daemon.socket, self.daemon.read_sockets)
+
+
+class TestUnrootDaemonClientInit(unittest.TestCase):
+    def test_init(self, *args, **kwargs):
+        daemon = unittest.mock.MagicMock()
+        socket = unittest.mock.MagicMock()
+        address = "3BxDL(kK"
+        self.client = scapy_unroot.daemon.UnrootDaemonClient(daemon, socket,
+                                                             address)
+        self.assertEqual(daemon, self.client.daemon)
+        self.assertEqual(socket, self.client.socket)
+        self.assertEqual(address, self.client.address)
+        self.assertIsNone(self.client.supersocket)
+
+
+class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
+    def setUp(self):
+        self.test_init()
+        self.client.daemon.iface_blacklist = ['as0LoYwrenoL']
+        if type in ["L2listen", "L2socket", "L3socket", "L3socket6"]:
+            self.orig_conf = getattr(conf, type)
+
+    def tearDown(self):
+        if type in ["L2listen", "L2socket", "L3socket", "L3socket6"]:
+            setattr(conf, type, self.orig_conf)
+
+    def _test_init_scapy_socket_success(self, scapy_socket_type,
+                                        init_args=None):
+        with unittest.mock.patch("scapy.config.conf.{}"
+                                 .format(scapy_socket_type)) as \
+             scapy_socket_mock:
+            res = self.client.init_supersocket(scapy_socket_type, init_args)
+            self.assertIn("success", res)
+            if init_args is None:
+                scapy_socket_mock.assert_called_once_with()
+            else:
+                scapy_socket_mock.assert_called_once_with(**init_args)
+            self.assertTrue(self.client.is_supersocket_initialized())
+
+    def _test_init_scapy_socket_wrong_args(self, scapy_socket_type):
+        setattr(conf, scapy_socket_type, SimpleSocket)
+        init_args = {"LnyEvFq2Dq3u": 21317}
+        res = self.client.init_supersocket(scapy_socket_type, init_args)
+        self.assertIn("error", res)
+        self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
+                         res["error"]["type"])
+        self.assertIn("__init__() got an unexpected keyword argument ",
+                      res["error"]["msg"])
+        self.assertFalse(self.client.is_supersocket_initialized())
+
+    def _test_init_scapy_socket_oserror(self, scapy_socket_type,
+                                        init_args=None):
+        with unittest.mock.patch("scapy.config.conf.{}"
+                                 .format(scapy_socket_type),
+                                 side_effect=OSError(133, "That error")) as \
+             scapy_socket_mock:
+            res = self.client.init_supersocket(scapy_socket_type, init_args)
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(133, res["error"]["errno"])
+            self.assertEqual("That error", res["error"]["msg"])
+            if init_args is None:
+                scapy_socket_mock.assert_called_once_with()
+            else:
+                scapy_socket_mock.assert_called_once_with(**init_args)
+            self.assertFalse(self.client.is_supersocket_initialized())
+
+    def _test_init_scapy_socket_blacklist(self, scapy_socket_type):
+        with unittest.mock.patch("scapy.config.conf.{}"
+                                 .format(scapy_socket_type),
+                                 side_effect=OSError(133, "That error")) as \
+             scapy_socket_mock:
+            res = self.client.init_supersocket(
+                scapy_socket_type,
+                {"iface": self.client.daemon.iface_blacklist[0]},
+            )
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(errno.EPERM, res["error"]["errno"])
+            self.assertEqual(os.strerror(errno.EPERM), res["error"]["msg"])
+            scapy_socket_mock.assert_not_called()
+            self.assertFalse(self.client.is_supersocket_initialized())
+
+    def test_init_scapy_socket_unknown_type(self):
+        res = self.client.init_supersocket("thisdoesnotexist",
+                                           {"iface": "test"})
+        self.assertIn("error", res)
+        self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
+                         res["error"]["type"])
+        self.assertEqual("Unknown socket type 'thisdoesnotexist'",
+                         res["error"]["msg"])
+        self.assertFalse(self.client.is_supersocket_initialized())
+
+    def test_init_scapy_l2socket__oserror(self):
+        self._test_init_scapy_socket_oserror(
+            "L2socket",
+            {"blafoo": "test", "this": "that"}
+        )
+
+    def test_init_scapy_l2socket__wrong_args(self):
+        self._test_init_scapy_socket_wrong_args("L2socket")
+
+    def test_init_scapy_l2socket__no_args(self):
+        self._test_init_scapy_socket_success("L2socket")
+
+    def test_init_scapy_l2socket__blacklisted_iface(self):
+        self._test_init_scapy_socket_blacklist("L2socket")
+
+    def test_init_scapy_l2socket__other_arg(self):
+        self._test_init_scapy_socket_success(
+            "L2socket",
+            {"blafoo": "test", "this": "that"}
+        )
+
+    def test_init_scapy_l2listen__oserror(self):
+        self._test_init_scapy_socket_oserror("L2listen", {"blafoo": "test", "this": "that"})
+
+    def test_init_scapy_l2listen__wrong_args(self):
+        self._test_init_scapy_socket_wrong_args("L2listen")
+
+    def test_init_scapy_l2listen__no_args(self):
+        self._test_init_scapy_socket_success("L2listen")
+
+    def test_init_scapy_l2listen__blacklisted_iface(self):
+        self._test_init_scapy_socket_blacklist("L2listen")
+
+    def test_init_scapy_l2listen__other_arg(self):
+        self._test_init_scapy_socket_success(
+            "L2listen",
+            {"blafoo": "test", "this": "that"}
+        )
+
+    def test_init_scapy_l3socket__oserror(self):
+        self._test_init_scapy_socket_oserror("L3socket", {"blafoo": "test", "this": "that"})
+
+    def test_init_scapy_l3socket__wrong_args(self):
+        self._test_init_scapy_socket_wrong_args("L3socket")
+
+    def test_init_scapy_l3socket__no_args(self):
+        self._test_init_scapy_socket_success("L3socket")
+
+    def test_init_scapy_l3socket__blacklisted_iface(self):
+        self._test_init_scapy_socket_blacklist("L3socket")
+
+    def test_init_scapy_l3socket__other_arg(self):
+        self._test_init_scapy_socket_success(
+            "L3socket",
+            {"blafoo": "test", "this": "that"}
+        )
+
+    def test_init_scapy_l3socket6__oserror(self):
+        self._test_init_scapy_socket_oserror("L3socket6",
+                                {"blafoo": "test", "this": "that"})
+
+    def test_init_scapy_l3socket6__wrong_args(self):
+        self._test_init_scapy_socket_wrong_args("L3socket6")
+
+    def test_init_scapy_l3socket6__no_args(self):
+        self._test_init_scapy_socket_success("L3socket6")
+
+    def test_init_scapy_l3socket6__blacklisted_iface(self):
+        self._test_init_scapy_socket_blacklist("L3socket6")
+
+    def test_init_scapy_l3socket6__other_arg(self):
+        self._test_init_scapy_socket_success(
+            "L3socket6",
+            {"blafoo": "test", "this": "that"}
+        )

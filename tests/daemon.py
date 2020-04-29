@@ -976,7 +976,10 @@ class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
         )
 
     def test_init_scapy_l2listen__oserror(self):
-        self._test_init_scapy_socket_oserror("L2listen", {"blafoo": "test", "this": "that"})
+        self._test_init_scapy_socket_oserror(
+            "L2listen",
+            {"blafoo": "test", "this": "that"}
+        )
 
     def test_init_scapy_l2listen__wrong_args(self):
         self._test_init_scapy_socket_wrong_args("L2listen")
@@ -994,7 +997,10 @@ class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
         )
 
     def test_init_scapy_l3socket__oserror(self):
-        self._test_init_scapy_socket_oserror("L3socket", {"blafoo": "test", "this": "that"})
+        self._test_init_scapy_socket_oserror(
+            "L3socket",
+            {"blafoo": "test", "this": "that"}
+        )
 
     def test_init_scapy_l3socket__wrong_args(self):
         self._test_init_scapy_socket_wrong_args("L3socket")
@@ -1012,8 +1018,10 @@ class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
         )
 
     def test_init_scapy_l3socket6__oserror(self):
-        self._test_init_scapy_socket_oserror("L3socket6",
-                                {"blafoo": "test", "this": "that"})
+        self._test_init_scapy_socket_oserror(
+            "L3socket6",
+            {"blafoo": "test", "this": "that"}
+        )
 
     def test_init_scapy_l3socket6__wrong_args(self):
         self._test_init_scapy_socket_wrong_args("L3socket6")

@@ -177,11 +177,12 @@ class UnrootDaemon:
         self.socket.listen(1024)
         self.read_sockets = {self.socket: "server_socket"}
         while True:
-            sockets, _ = SuperSocket.select(self.read_sockets)
+            sockets, _ = SuperSocket.select(
+                set(self.read_sockets) | set(self.clients)
+            )
             for sock in sockets:
                 if self.socket == sock:
                     s, address = sock.accept()
-                    self.read_sockets[s] = address
                     self.clients[s] = UnrootDaemonClient(self, s, address)
                 elif sock in self.clients:
                     try:
@@ -206,11 +207,9 @@ class UnrootDaemon:
                                 None
                             )
                             self.clients.pop(sock, None)
-                            self.read_sockets.pop(sock, None)
                             sock.close()
                     except ConnectionError:
                         self.clients.pop(sock, None)
-                        self.read_sockets.pop(sock, None)
                         sock.close()
                 else:
                     try:

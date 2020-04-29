@@ -91,6 +91,7 @@ class UnrootDaemon:
         self.socketname = os.path.join(run_dir, "server-socket")
         self.socket = None
         self.clients = dict()
+        self.read_sockets = dict()
 
     def _guarded_fork(self, num):
         try:
@@ -175,7 +176,7 @@ class UnrootDaemon:
         os.chown(self.socketname, os.getuid(), self.group)
         os.chmod(self.socketname, 0o660)
         self.socket.listen(1024)
-        self.read_sockets = {self.socket: "server_socket"}
+        self.read_sockets[self.socket] = "server_socket"
         while True:
             sockets, _ = SuperSocket.select(
                 set(self.read_sockets) | set(self.clients)

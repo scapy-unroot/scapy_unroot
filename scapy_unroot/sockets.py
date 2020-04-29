@@ -8,7 +8,8 @@
 # details.
 
 """
-Sockets to communicate with the daemon to enable using scapy without root.
+Sockets to communicate with the daemon to enable using scapy without root
+permissions.
 """
 
 import base64

@@ -9,7 +9,7 @@
 [codecov]: https://codecov.io/gh/miri64/scapy_unroot/branch/master/graph/badge.svg
 
 # scapy-unroot
-Daemon and tooling to enable using [scapy] without root.
+Daemon and tooling to enable using [scapy] without root permissions.
 
 ## Installation
 `scapy_unroot` can be installed by just running
@@ -23,15 +23,15 @@ The requirements also installed by this are listed in
 
 ## Usage
 ### The `scapy-unroot` daemon
-The daemon to allow usage of scapy without root requires root itself. You can
-start it with the following command:
+The daemon to allow usage of scapy without root permissions requires root
+itself. You can start it with the following command:
 
 ```sh
 sudo scapy-unroot scapy
 ```
 
 The provided argument `scapy` should be a permission group, users who are
-allowed to use scapy without root should be in.
+allowed to use scapy without root permissions should be in.
 
 By default, all files related to `scapy_unroot` are managed in the directory
 `/var/run/scapy-unroot`. You can change that directory using the `-r` /

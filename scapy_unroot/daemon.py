@@ -9,7 +9,7 @@
 # details.
 
 """
-Daemon to enable using scapy without root.
+Daemon to enable using scapy without root permissions.
 """
 
 import argparse

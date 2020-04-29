@@ -186,6 +186,8 @@ class UnrootDaemon:
                     s, address = sock.accept()
                     self.clients[s] = UnrootDaemonClient(self, s, address)
                 elif sock in self.clients:
+                    client = self.clients.get(sock)
+                    assert client.socket == sock
                     try:
                         b = sock.recv(DAEMON_MTU)
                         if len(b) == 0:
@@ -198,20 +200,14 @@ class UnrootDaemon:
                             # messages are exchanged between UNIX domain stream
                             # sockets all the time
                             continue
-                        res = self._eval_req(req, self.clients[sock])
+                        res = self._eval_req(req, client)
                         sock.send(
                             json.dumps(res, separators=(",", ":")).encode()
                         )
                         if _is_closed_resp(res):
-                            self.read_sockets.pop(
-                                self.clients[sock].supersocket,
-                                None
-                            )
-                            self.clients.pop(sock, None)
-                            sock.close()
+                            self.remove_client(client)
                     except ConnectionError:
-                        self.clients.pop(sock, None)
-                        sock.close()
+                        self.remove_client(client)
                 else:
                     client = self.read_sockets.get(sock)
                     if isinstance(client, UnrootDaemonClient):
@@ -230,12 +226,21 @@ class UnrootDaemon:
                                 else ts,
                             }}, separators=(",", ":")).encode())
                         except ConnectionError:
-                            sock.close()
-                            self.read_sockets.pop(sock, None)
                             self.clients.pop(client.socket, None)
+                            client.close()
                     else:
                         self.logger.error("Unexpected socket selected {}"
                                           .format(sock))
+
+    def remove_client(self, client):
+        self.clients.pop(client.socket, None)
+        client.close()
+
+    def watch_socket(self, socket, mapping=None):
+        self.read_sockets[socket] = mapping
+
+    def unwatch_socket(self, socket):
+        self.read_sockets.pop(socket, None)
 
 
 class UnrootDaemonClient:
@@ -244,6 +249,11 @@ class UnrootDaemonClient:
         self.socket = socket
         self.address = address
         self.supersocket = None
+
+    def close(self):
+        self.daemon.unwatch_socket(self.supersocket)
+        self.close_supersocket()
+        self.socket.close()
 
     def is_supersocket_initialized(self):
         return self.supersocket is not None
@@ -263,7 +273,7 @@ class UnrootDaemonClient:
                 return _os_error_resp(e)
             else:
                 self.supersocket = supersocket
-                self.daemon.read_sockets[supersocket] = self
+                self.daemon.watch_socket(supersocket, self)
                 return _success_resp()
         else:
             return _error_resp(

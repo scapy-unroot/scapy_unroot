@@ -153,7 +153,7 @@ class UnrootDaemon:
     def _is_closed_resp(resp):
         return "closed" in resp
 
-    def _eval_data(self, data, socket):
+    def _eval_data(self, data, client):
         op = data.get("op")
         if op == "init":
             if data.get("type") in ["L2listen", "L2socket",
@@ -169,9 +169,9 @@ class UnrootDaemon:
                 except OSError as e:
                     return self._os_error_resp(e)
                 else:
-                    socket["supersocket"] = supersocket
+                    client["supersocket"] = supersocket
                     self.read_sockets[supersocket] = "supersocket.{}" \
-                        .format(socket["address"])
+                        .format(client["address"])
                     return self._success_resp()
             else:
                 return self._error_resp(
@@ -179,11 +179,11 @@ class UnrootDaemon:
                     "Unknown socket type '{}'".format(data.get("type"))
                 )
         elif op == "send":
-            if "supersocket" not in socket:
+            if "supersocket" not in client:
                 return self._error_resp(
                     UNINITILIZED,
                     "Socket for '{}' is uninitialized"
-                    .format(socket["address"])
+                    .format(client["address"])
                 )
             type = data.get("type", "raw")
             data = data.get("data", "")
@@ -199,18 +199,18 @@ class UnrootDaemon:
                     UNKNOWN_TYPE, "Unknown packet type {}".format(type)
                 )
             try:
-                res = socket["supersocket"].send(getattr(layers, type)(bytes))
+                res = client["supersocket"].send(getattr(layers, type)(bytes))
                 return self._success_resp(res)
             except OSError as e:
                 return self._os_error_resp(e)
         elif op == "close":
-            if "supersocket" in socket:
+            if "supersocket" in client:
                 try:
-                    socket["supersocket"].close()
+                    client["supersocket"].close()
                 except Exception as exc:
                     self.logger.warning("Error on closing {} ({})"
-                                        .format(socket["supersocket"], exc))
-            return self._closed_resp(socket)
+                                        .format(client["supersocket"], exc))
+            return self._closed_resp(client)
         else:
             return self._error_resp(
                 UNKNOWN_OP, "Operation '{}' unknown".format(data.get("op"))

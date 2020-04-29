@@ -245,8 +245,7 @@ class UnrootDaemon:
                     }
                 elif sock in self.clients:
                     try:
-                        # MTU plus extra for JSON data
-                        b = sock.recv(MTU + 128)
+                        b = sock.recv(DAEMON_MTU)
                         if len(b) == 0:
                             continue
                         try:

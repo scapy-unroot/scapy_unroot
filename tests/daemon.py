@@ -349,7 +349,8 @@ class TestRunDaemonThreaded(TestRunDaemonBase):
             if self.stop:
                 raise self.Stop()
             # make sure Mocks are not accidentally end up in a system function
-            _read_sockets = read_sockets.copy()
+            _read_sockets = set()
+            _read_sockets |= read_sockets
             for sock in read_sockets:
                 if isinstance(sock, unittest.mock.Mock):
                     _read_sockets.remove(sock)
@@ -805,9 +806,10 @@ class TestRunDaemonReceive(TestRunDaemonBase):
     def _run_daemon(self, client, select, *args):
         select.side_effect = [([self.sock], None), InterruptedError]
         the_client = scapy_unroot.daemon.UnrootDaemonClient(self.daemon,
-                                                            self.sock,
+                                                            client,
                                                             "blafoo")
         the_client.supersocket = self.sock
+        self.daemon.read_sockets[self.sock] = the_client
         self.daemon.clients[client] = the_client
         with self.assertRaises(InterruptedError):
             self.daemon.run()

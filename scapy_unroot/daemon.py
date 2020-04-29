@@ -136,10 +136,7 @@ class UnrootDaemon:
                         }
                     }
                 try:
-                    socket["supersocket"] = getattr(conf, data["type"])(**args)
-                    return {
-                        "success": 0
-                    }
+                    supersocket = getattr(conf, data["type"])(**args)
                 except TypeError as e:
                     return {
                         "error": {
@@ -154,6 +151,13 @@ class UnrootDaemon:
                             "msg": e.strerror,
                             "errno": e.errno,
                         }
+                    }
+                else:
+                    socket["supersocket"] = supersocket
+                    self.read_sockets[supersocket] = "supersocket.{}" \
+                        .format(socket["address"])
+                    return {
+                        "success": 0
                     }
             else:
                 return {
@@ -255,13 +259,6 @@ class UnrootDaemon:
                         except json.decoder.JSONDecodeError:
                             continue
                         res = self._eval_data(data, self.clients[sock])
-                        if data.get("op", None) == "init" and \
-                           "supersocket" in self.clients[sock]:
-                            self.read_sockets[
-                                self.clients[sock]["supersocket"]
-                            ] = "supersocket.{}".format(
-                                self.clients[sock]["address"]
-                            )
                         sock.send(
                             json.dumps(res, separators=(",", ":")).encode()
                         )

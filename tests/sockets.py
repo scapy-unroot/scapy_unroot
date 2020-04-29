@@ -14,6 +14,7 @@ without root.
 
 import base64
 import json
+import os
 import socket
 import unittest
 import unittest.mock
@@ -31,16 +32,29 @@ class TestSocketBase(unittest.TestCase):
         # ScapyUnrootSocket.close() print warnings when object is destroye
         scapy_unroot.sockets.logger.setLevel("CRITICAL")
 
-    def _test_init(self, socket_mock, scapy_conf_type, recv_data, **args):
+    @unittest.mock.patch("os.path.exists", side_effect=[True, True, False])
+    @unittest.mock.patch.multiple("scapy_unroot.sockets.ScapyUnrootSocket",
+                                  _acquire_socket_lock=unittest.mock.DEFAULT,
+                                  _release_socket_lock=unittest.mock.DEFAULT)
+    def _test_init(self, socket_mock, scapy_conf_type, recv_data, exists,
+                   _acquire_socket_lock, _release_socket_lock, **args):
         socket_mock.return_value.recv = lambda x: recv_data
         sock = scapy_unroot.sockets.ScapyUnrootSocket(
-            "test-server", scapy_conf_type, **args
+            "test-server", "/tmp", scapy_conf_type, **args
+        )
+        _acquire_socket_lock.assert_called_once()
+        _release_socket_lock.assert_called_once_with(
+            _acquire_socket_lock.return_value
         )
         self.assertEqual("test-server", sock.server_addr)
         self.assertEqual(scapy_conf_type, sock.scapy_conf_type)
         socket_mock.assert_called_once_with(socket.AF_UNIX, socket.SOCK_STREAM)
         self.assertEqual(socket_mock.return_value, sock.ins)
         sock.ins.connect.assert_called_once_with(sock.server_addr)
+        # os.path.exists is mocked to return True two times => count is 2
+        sock.ins.bind.assert_called_once_with(
+            os.path.join("/tmp", "{}.2".format(scapy_conf_type))
+        )
         exp_req = {"op": "init", "type": scapy_conf_type}
         if len(args) > 0:
             exp_req["args"] = args
@@ -320,9 +334,12 @@ class TestSocketSelect(TestSocketBase):
         self.assertEqual(select.return_value, res)
 
 
+@unittest.mock.patch.multiple("scapy_unroot.sockets.ScapyUnrootSocket",
+                              _acquire_socket_lock=unittest.mock.DEFAULT,
+                              _release_socket_lock=unittest.mock.DEFAULT)
 @unittest.mock.patch("socket.socket")
 class TestConfigureSockets(unittest.TestCase):
-    def test_configure_sockets(self, socket_mock):
+    def test_configure_sockets(self, socket_mock, *args, **kwargs):
         socket_mock.return_value.recv = lambda x: '{"success":0}'
         scapy_unroot.sockets.configure_sockets()
         self.assertEqual("L2listen", conf.L2listen().scapy_conf_type)
@@ -330,9 +347,9 @@ class TestConfigureSockets(unittest.TestCase):
         self.assertEqual("L3socket", conf.L3socket().scapy_conf_type)
         self.assertEqual("L3socket6", conf.L3socket6().scapy_conf_type)
 
-    def test_configure_sockets_with_params(self, socket_mock):
+    def test_configure_sockets_with_params(self, socket_mock, *args, **kwargs):
         socket_mock.return_value.recv = lambda x: '{"success":0}'
-        scapy_unroot.sockets.configure_sockets("foobar", 34.874)
+        scapy_unroot.sockets.configure_sockets("foobar", "/tmp", 34.874)
         res = conf.L3socket6()
         self.assertEqual("L3socket6", res.scapy_conf_type)
         self.assertEqual("foobar", res.server_addr)

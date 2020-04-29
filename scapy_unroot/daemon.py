@@ -57,6 +57,17 @@ class UnrootDaemon:
         self.socket = None
         self.clients = dict()
 
+    def _guarded_fork(self, num):
+        try:
+            pid = os.fork()
+            if pid > 0:
+                # exit first parent
+                sys.exit(0)
+        except OSError as exc:
+            self.logger.error("fork #{} failed: {exc.errno} ({exc.strerror})"
+                              .format(num, exc=exc))
+            sys.exit(1)
+
     def _fork_as_daemon(self):
         """
         Does the UNIX double-fork magic to the calling process, see Stevens'
@@ -64,30 +75,13 @@ class UnrootDaemon:
         (ISBN 0201563177)
         http://www.erlenstar.demon.co.uk/unix/faq_2.html#SEC16
         """
-        try:
-            pid = os.fork()
-            if pid > 0:
-                # exit first parent
-                sys.exit(0)
-        except OSError as exc:
-            self.logger.error("fork #1 failed: {exc.errno} ({exc.strerror})"
-                              .format(exc=exc))
-            sys.exit(1)
-
+        self._guarded_fork(1)
         # decouple from parent environment
         os.chdir("/")
         os.setsid()
         os.umask(0)
         # do second fork
-        try:
-            pid = os.fork()
-            if pid > 0:
-                # exit from second parent
-                sys.exit(0)
-        except OSError as exc:
-            self.logger.error("fork #2 failed: {exc.errno} ({exc.strerror})"
-                              .format(exc=exc))
-            sys.exit(1)
+        self._guarded_fork(2)
         output_file = os.path.join(self.run_dir, "output.log")
         output = open(output_file, 'a+')
         # redirect standard file descriptors

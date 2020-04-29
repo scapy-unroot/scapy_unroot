@@ -12,12 +12,15 @@ Sockets to communicate with the daemon to enable using scapy without root
 permissions.
 """
 
+import atexit
 import base64
+import fcntl
 import functools
 import json
 import logging
 import os
 import socket
+import tempfile
 
 from scapy.all import conf, MTU, Scapy_Exception, SuperSocket
 import scapy.layers.all
@@ -36,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 class ScapyUnrootSocket(SuperSocket):
+    _count = 0
     desc = "read/write packets via the scapy_unroot daemon"
 
     def _op(self, op, op_type=None, data=None, **args):
@@ -65,12 +69,30 @@ class ScapyUnrootSocket(SuperSocket):
             raise RuntimeError("Unexpected response from daemon '{}'"
                                .format(self.server_addr))
 
-    def __init__(self, server_addr, scapy_conf_type, connection_timeout=0.01,
-                 **kwargs):
+    def _acquire_socket_lock(self):
+        lock = open(os.path.join(self.socket_dir, "socket.lock"), "a+")
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        return lock
+
+    def _release_socket_lock(self, lock):
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        lock.close()
+
+    def __init__(self, server_addr, socket_dir, scapy_conf_type,
+                 connection_timeout=0.01, **kwargs):
         self.server_addr = server_addr
+        self.socket_dir = socket_dir
         self.scapy_conf_type = scapy_conf_type
         self.connection_timeout = connection_timeout
         self.ins = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        lock = self._acquire_socket_lock()
+        path_fmt = os.path.join(self.socket_dir, "{}.{}")
+        ins_name = path_fmt.format(scapy_conf_type, self._count)
+        while os.path.exists(ins_name):
+            self._count += 1
+            ins_name = path_fmt.format(scapy_conf_type, self._count)
+        self.ins.bind(ins_name)
+        self._release_socket_lock(lock)
         if "listen" in scapy_conf_type:
             self.outs = None
         else:
@@ -130,10 +152,21 @@ class ScapyUnrootSocket(SuperSocket):
         return res
 
 
-def configure_sockets(server_addr=None, connection_timeout=0.1):
+def configure_sockets(server_addr=None, socket_dir=None,
+                      connection_timeout=0.1):
     if server_addr is None:
         server_addr = os.path.join(daemon.RUN_DIR_DEFAULT, "server-socket")
+    if socket_dir is None:
+        _socket_dir = tempfile.TemporaryDirectory(
+                prefix="scapy_unroot.sockets."
+            )
+
+        def _remove_socket_dir():
+            _socket_dir.cleanup()
+
+        atexit.register(_remove_socket_dir)
+        socket_dir = _socket_dir.name
     for socket_conf in ["L2listen", "L2socket", "L3socket", "L3socket6"]:
         setattr(conf, socket_conf,
-                functools.partial(ScapyUnrootSocket, server_addr,
+                functools.partial(ScapyUnrootSocket, server_addr, socket_dir,
                                   socket_conf, connection_timeout))

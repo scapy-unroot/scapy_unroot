@@ -68,6 +68,20 @@ class UnrootDaemon:
                               .format(num, exc=exc))
             sys.exit(1)
 
+    def _create_pidfile(self):
+        self.pidfile = os.path.join(self.run_dir, "pidfile")
+
+        atexit.register(self._delete_pidfile)
+        pid = os.getpid()
+        # write pidfile
+        with open(self.pidfile, "w+") as f:
+            print("{}".format(pid), file=f)
+
+    def _delete_pidfile(self):
+        if hasattr(self, "pidfile") and self.pidfile and \
+           os.path.exists(self.pidfile):
+            os.remove(self.pidfile)
+
     def _fork_as_daemon(self):
         """
         Does the UNIX double-fork magic to the calling process, see Stevens'
@@ -89,20 +103,10 @@ class UnrootDaemon:
         sys.stderr.flush()
         os.dup2(output.fileno(), sys.stdout.fileno())
         os.dup2(output.fileno(), sys.stderr.fileno())
-
-        self.pidfile = os.path.join(self.run_dir, "pidfile")
-
-        atexit.register(self.__del__)
-        pid = os.getpid()
-        # write pidfile
-        with open(self.pidfile, "w+") as f:
-            print("{}".format(pid), file=f)
-        return pid
+        self._create_pidfile()
 
     def __del__(self):
-        if hasattr(self, "pidfile") and self.pidfile and \
-           os.path.exists(self.pidfile):
-            os.remove(self.pidfile)
+        self._delete_pidfile()
         if hasattr(self, "clients"):
             for client in self.clients:
                 if "supersocket" in self.clients[client]:

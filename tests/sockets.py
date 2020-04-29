@@ -311,6 +311,15 @@ class TestSocketRecv(TestWithSocketInitialized):
                                 ts=ts, bufsize=3)
 
 
+@unittest.mock.patch("scapy.all.SuperSocket.select")
+class TestSocketSelect(TestSocketBase):
+    def test_select(self, select):
+        res = scapy_unroot.sockets.ScapyUnrootSocket.select(921650274,
+                                                            kpsdyjjv="1s13C3D")
+        select.assert_called_once_with(921650274, kpsdyjjv="1s13C3D")
+        self.assertEqual(select.return_value, res)
+
+
 @unittest.mock.patch("socket.socket")
 class TestConfigureSockets(unittest.TestCase):
     def test_configure_sockets(self, socket_mock):

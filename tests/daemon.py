@@ -1038,3 +1038,73 @@ class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
             "L3socket6",
             {"blafoo": "test", "this": "that"}
         )
+
+    def test_send_uninitialized(self):
+        res = self.client.send_via_supersocket(data="abcd")
+        self.assertIn("error", res)
+        self.assertEqual(scapy_unroot.daemon.UNINITILIZED,
+                         res["error"]["type"])
+        self.assertRegex(res["error"]["msg"],
+                         r"Socket for '.*' is uninitialized")
+        self.assertFalse(self.client.is_supersocket_initialized())
+
+    def _test_with_socket_initialized(self):
+        self.client.supersocket = unittest.mock.MagicMock()
+        self.assertTrue(self.client.is_supersocket_initialized())
+
+    def test_send_unknown_type(self):
+        self._test_with_socket_initialized()
+        res = self.client.send_via_supersocket(type="grwc4", data="abcd")
+        self.assertIn("error", res)
+        self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
+                         res["error"]["type"])
+        self.assertEqual("Unknown packet type grwc4", res["error"]["msg"])
+        self.client.supersocket.assert_not_called()
+
+    def test_send_non_base64_data(self):
+        self._test_with_socket_initialized()
+        res = self.client.send_via_supersocket(data="*#%/\\\0")
+        self.assertIn("error", res)
+        self.assertEqual(scapy_unroot.daemon.INVALID_DATA,
+                         res["error"]["type"])
+        self.assertEqual("data '*#%/\\\0' is not base64 encoded",
+                         res["error"]["msg"])
+
+    def _test_send_correct(self, args, mock_attrs=None):
+        self._test_with_socket_initialized()
+        if mock_attrs is not None:
+            self.client.supersocket.configure_mock(**mock_attrs)
+        return self.client.send_via_supersocket(**args)
+
+    def _test_send_success(self, packet_type=None):
+        test_data = b"%\x8a:\xde\x14\rc\x97\x0fcI\xf08\xde\xf7\xa4\x98m\x04@"
+        args = {"data": base64.b64encode(test_data).decode()}
+        if packet_type is None:
+            packet_type = raw
+        else:
+            args["type"] = packet_type.__name__
+        res = self._test_send_correct(
+            args,
+            {'send.return_value': len(test_data)}
+        )
+        self.assertIn("success", res)
+        self.client.supersocket.send.called_with(packet_type(test_data))
+
+    def test_send_oserror(self):
+        test_data = b"%\x8a:\xde\x14\rc\x97\x0fcI\xf08\xde\xf7\xa4\x98m\x04@"
+        args = {"data": base64.b64encode(test_data).decode()}
+        res = self._test_send_correct(
+            args,
+            {'send.side_effect': OSError(180, "Arghs!")}
+        )
+        self.client.supersocket.send.called_with(raw(test_data))
+        self.assertIn("error", res)
+        self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+        self.assertEqual(180, res["error"]["errno"])
+        self.assertEqual("Arghs!", res["error"]["msg"])
+
+    def test_send_success_raw(self):
+        self._test_send_success()
+
+    def test_send_success_ether(self):
+        self._test_send_success(Ether)

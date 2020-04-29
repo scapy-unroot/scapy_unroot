@@ -208,19 +208,19 @@ class UnrootDaemon:
                                     .format(client["supersocket"], exc))
         return self._closed_resp(client)
 
-    def _eval_data(self, data, client):
-        op = data.get("op")
+    def _eval_req(self, req, client):
+        op = req.get("op")
         if op == "init":
-            return self._init_supersocket(data, client)
+            return self._init_supersocket(req, client)
         elif op == "send":
             return self._send_via_supersocket(client,
-                                              data.get("type", "raw"),
-                                              data.get("data", ""))
+                                              req.get("type", "raw"),
+                                              req.get("data", ""))
         elif op == "close":
             return self._close_supersocket(client)
         else:
             return self._error_resp(
-                UNKNOWN_OP, "Operation '{}' unknown".format(data.get("op"))
+                UNKNOWN_OP, "Operation '{}' unknown".format(req.get("op"))
             )
 
     def run(self):
@@ -250,13 +250,13 @@ class UnrootDaemon:
                             # don't bother trying to parse this
                             continue
                         try:
-                            data = json.loads(b)
+                            req = json.loads(b)
                         except json.decoder.JSONDecodeError:
                             # silently ignore JSON decode errors as empty
                             # messages are exchanged between UNIX domain stream
                             # sockets all the time
                             continue
-                        res = self._eval_data(data, self.clients[sock])
+                        res = self._eval_req(req, self.clients[sock])
                         sock.send(
                             json.dumps(res, separators=(",", ":")).encode()
                         )

@@ -246,15 +246,15 @@ class UnrootDaemon:
                     }
                 elif sock in self.clients:
                     try:
+                        # MTU plus extra for JSON data
+                        b = sock.recv(MTU + 128)
+                        if len(b) == 0:
+                            continue
                         try:
-                            # MTU plus extra for JSON data
-                            b = sock.recv(MTU + 128)
-                            if len(b) == 0:
-                                continue
                             data = json.loads(b)
-                            res = self._eval_data(data, self.clients[sock])
                         except json.decoder.JSONDecodeError:
                             continue
+                        res = self._eval_data(data, self.clients[sock])
                         if data.get("op", None) == "init" and \
                            "supersocket" in self.clients[sock]:
                             self.read_sockets[

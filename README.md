@@ -15,7 +15,7 @@ Daemon and tooling to enable using [scapy] without root permissions.
 `scapy_unroot` can be installed by just running
 
 ```sh
-./setup.py install
+pip install scapy_unroot
 ```
 
 The requirements also installed by this are listed in

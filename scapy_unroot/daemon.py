@@ -86,7 +86,7 @@ class UnrootDaemon:
         self.group = grp.getgrnam(group).gr_gid
         self.daemonize = daemonize
         self.run_dir = run_dir
-        self.iface_blacklist = interface_blacklist or []
+        self._iface_blacklist = interface_blacklist or []
         self.pidfile = None
         self.socketname = os.path.join(run_dir, "server-socket")
         self.socket = None
@@ -165,6 +165,10 @@ class UnrootDaemon:
             return _error_resp(
                 UNKNOWN_OP, "Operation '{}' unknown".format(op)
             )
+
+    @property
+    def iface_blacklist(self):
+        return self._iface_blacklist
 
     def run(self):
         if not os.path.exists(self.run_dir):

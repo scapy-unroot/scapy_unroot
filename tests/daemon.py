@@ -492,26 +492,30 @@ class TestSocketInteraction(TestRunDaemonThreaded):
             self.assertEqual(1, len(self.daemon.read_sockets))
 
     def _test_init_scapy_socket(self, sock, scapy_socket_type, init_args=None):
+        ins_name = "foobaria"
+        ins_mock = unittest.mock.Mock(getpeername=ins_name)
         self.assertDictEqual({}, self.daemon.clients)
         self.assertEqual(1, len(self.daemon.read_sockets))
+        self.daemon.clients[ins_mock] = scapy_unroot.daemon.UnrootDaemonClient(
+            self.daemon, ins_mock, ins_name
+        )
         sock.connect(self.daemon.socketname)
         self.assertTrue(self.wait_for_next_select(1))
-        self.assertEqual(1, len(self.daemon.clients))
+        self.assertEqual(2, len(self.daemon.clients))
         self.assertEqual(1, len(self.daemon.read_sockets))
-        req = {"op": "init", "type": scapy_socket_type}
+        req = {"op": "init", "ins": ins_name, "type": scapy_socket_type}
         if init_args is not None:
             req["args"] = init_args
         sock.send(json.dumps(req).encode())
 
     def _expect_init_oserror(self, sock):
-        self.assertEqual(1, len(self.daemon.clients))
+        self.assertEqual(2, len(self.daemon.clients))
         self.assertEqual(1, len(self.daemon.read_sockets))
         self.assertTrue(self.wait_for_next_select(1))
         sock.settimeout(CONNECTION_TIMEOUT)
         res = json.loads(sock.recv(scapy_unroot.daemon.DAEMON_MTU))
         self.assertIn("error", res)
         self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
-        self.assertEqual(1, len(self.daemon.clients))
         self.assertEqual(1, len(self.daemon.read_sockets))
         return res
 
@@ -571,6 +575,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 self._test_init_scapy_socket(sock, scapy_socket_type,
                                              init_args)
                 res = self._expect_init_oserror(sock)
+                self.assertEqual(1, len(self.daemon.clients))
                 self.assertEqual(133, res["error"]["errno"])
                 self.assertEqual("That error", res["error"]["msg"])
                 if init_args is None:
@@ -590,6 +595,7 @@ class TestSocketInteraction(TestRunDaemonThreaded):
                 self._test_init_scapy_socket(sock, scapy_socket_type,
                                              {"iface": self.blacklist[0]})
                 res = self._expect_init_oserror(sock)
+                self.assertEqual(2, len(self.daemon.clients))
                 self.assertEqual(errno.EPERM, res["error"]["errno"])
                 self.assertEqual(os.strerror(errno.EPERM), res["error"]["msg"])
                 scapy_socket_mock.assert_not_called()
@@ -803,12 +809,13 @@ class TestRunDaemonReceive(TestRunDaemonBase):
     @unittest.mock.patch('os.chmod')
     @unittest.mock.patch('os.chown')
     @unittest.mock.patch('scapy.all.SuperSocket.select')
-    def _run_daemon(self, client, select, *args):
+    def _run_daemon(self, client, ins, select, *args):
         select.side_effect = [([self.sock], None), InterruptedError]
         the_client = scapy_unroot.daemon.UnrootDaemonClient(self.daemon,
                                                             client,
                                                             "blafoo")
         the_client.supersocket = self.sock
+        the_client.ins = ins
         self.daemon.read_sockets[self.sock] = the_client
         self.daemon.clients[client] = the_client
         with self.assertRaises(InterruptedError):
@@ -818,28 +825,30 @@ class TestRunDaemonReceive(TestRunDaemonBase):
         data = b"\x9c\x1f]8\x19\xc2P\x99>\xc3\xa0\xb9yh\x8a$\xbe\x8d[\xe7c" \
                b"\x00\xd3\xdbM\x0c\xc2\xb4\xd3\x1d"
         ts = 5975408383.001369
-        client = unittest.mock.MagicMock()
+        client, ins = unittest.mock.MagicMock(), unittest.mock.MagicMock()
         attrs = {'recv_raw.return_value': (IP, data, ts)}
         self.sock.configure_mock(**attrs)
         with self.assertLogs('scapy_unroot.daemon', level='INFO') as cm:
-            self._run_daemon(client)
+            self._run_daemon(client, ins)
         self.assertTrue(any(
             "Sending IP(" in line for line in cm.output
         ))
         self.assertTrue(any(
             "Unexpected socket selected" not in line for line in cm.output
         ))
-        client.send.assert_called_once_with(
+        client.send.assert_not_called()
+        ins.send.assert_called_once_with(
             '{{"recv":{{"type":"IP","data":"{}","ts":{}}}}}'
             .format(base64.b64encode(data).decode(), ts).encode()
         )
 
     def test_receive__connection_error1(self):
-        client = unittest.mock.MagicMock()
+        client, ins = unittest.mock.MagicMock(), unittest.mock.MagicMock()
         attrs = {'recv_raw.side_effect': ConnectionError}
         self.sock.configure_mock(**attrs)
-        self._run_daemon(client)
+        self._run_daemon(client, ins)
         client.send.assert_not_called()
+        ins.send.assert_not_called()
         self.assertNotIn(client, self.daemon.clients)
         self.assertEqual(1, len(self.daemon.read_sockets))
         self.assertIn(self.daemon.socket, self.daemon.read_sockets)
@@ -850,13 +859,15 @@ class TestRunDaemonReceive(TestRunDaemonBase):
         attrs = {
             'send.side_effect': ConnectionError,
         }
-        client = unittest.mock.MagicMock(**attrs)
+        client = unittest.mock.MagicMock()
+        ins = unittest.mock.MagicMock(**attrs)
         attrs = {
             'recv_raw.return_value': (raw, data, ts),
         }
         self.sock.configure_mock(**attrs)
-        self._run_daemon(client)
-        client.send.assert_called_once_with(
+        self._run_daemon(client, ins)
+        client.send.assert_not_called()
+        ins.send.assert_called_once_with(
             '{{"recv":{{"type":"raw","data":"{}","ts":{}}}}}'
             .format(base64.b64encode(data).decode(), ts).encode()
         )
@@ -889,12 +900,42 @@ class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
         if type in ["L2listen", "L2socket", "L3socket", "L3socket6"]:
             setattr(conf, type, self.orig_conf)
 
+    def test_init_scapy_ins_missing(self):
+        with unittest.mock.patch("scapy.config.conf.{}"
+                                 .format("L2socket")) as \
+             scapy_socket_mock:
+            self.client.daemon.get_client_by_address.return_value = None
+            res = self.client.init_supersocket("L2socket")
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(errno.ENOTCONN, res["error"]["errno"])
+            self.assertEqual(os.strerror(errno.ENOTCONN), res["error"]["msg"])
+            scapy_socket_mock.assert_not_called()
+            self.assertFalse(self.client.is_supersocket_initialized())
+
+    def test_init_scapy_not_connected(self):
+        with unittest.mock.patch("scapy.config.conf.{}"
+                                 .format("L2socket")) as \
+             scapy_socket_mock:
+            self.client.daemon.get_client_by_address.return_value = None
+            res = self.client.init_supersocket("L2socket", "test-ins-client")
+            self.assertIn("error", res)
+            self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
+            self.assertEqual(errno.ENOTCONN, res["error"]["errno"])
+            self.assertEqual(os.strerror(errno.ENOTCONN), res["error"]["msg"])
+            scapy_socket_mock.assert_not_called()
+            self.assertFalse(self.client.is_supersocket_initialized())
+
     def _test_init_scapy_socket_success(self, scapy_socket_type,
                                         init_args=None):
         with unittest.mock.patch("scapy.config.conf.{}"
                                  .format(scapy_socket_type)) as \
              scapy_socket_mock:
-            res = self.client.init_supersocket(scapy_socket_type, init_args)
+            res = self.client.init_supersocket(
+                scapy_socket_type,
+                "test-ins-client",
+                init_args
+            )
             self.assertIn("success", res)
             if init_args is None:
                 scapy_socket_mock.assert_called_once_with()
@@ -905,7 +946,11 @@ class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
     def _test_init_scapy_socket_wrong_args(self, scapy_socket_type):
         setattr(conf, scapy_socket_type, SimpleSocket)
         init_args = {"LnyEvFq2Dq3u": 21317}
-        res = self.client.init_supersocket(scapy_socket_type, init_args)
+        res = self.client.init_supersocket(
+            scapy_socket_type,
+            "test-ins-client",
+            init_args
+        )
         self.assertIn("error", res)
         self.assertEqual(scapy_unroot.daemon.UNKNOWN_TYPE,
                          res["error"]["type"])
@@ -919,7 +964,11 @@ class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
                                  .format(scapy_socket_type),
                                  side_effect=OSError(133, "That error")) as \
              scapy_socket_mock:
-            res = self.client.init_supersocket(scapy_socket_type, init_args)
+            res = self.client.init_supersocket(
+                scapy_socket_type,
+                "test-ins-client",
+                init_args
+            )
             self.assertIn("error", res)
             self.assertEqual(scapy_unroot.daemon.OS, res["error"]["type"])
             self.assertEqual(133, res["error"]["errno"])
@@ -937,6 +986,7 @@ class TestUnrootDaemonClientSupersocket(TestUnrootDaemonClientInit):
              scapy_socket_mock:
             res = self.client.init_supersocket(
                 scapy_socket_type,
+                "test-ins-client",
                 {"iface": self.client.daemon.iface_blacklist[0]},
             )
             self.assertIn("error", res)

@@ -39,6 +39,8 @@ class TestSocketBase(unittest.TestCase):
     def _test_init(self, socket_mock, scapy_conf_type, recv_data, exists,
                    _acquire_socket_lock, _release_socket_lock, **args):
         socket_mock.return_value.recv = lambda x: recv_data
+        socket_mock.return_value.getsockname = \
+            lambda: os.path.join("/tmp", "{}.2".format(scapy_conf_type))
         sock = scapy_unroot.sockets.ScapyUnrootSocket(
             "test-server", "/tmp", scapy_conf_type, **args
         )
@@ -48,14 +50,15 @@ class TestSocketBase(unittest.TestCase):
         )
         self.assertEqual("test-server", sock.server_addr)
         self.assertEqual(scapy_conf_type, sock.scapy_conf_type)
-        socket_mock.assert_called_once_with(socket.AF_UNIX, socket.SOCK_STREAM)
+        socket_mock.assert_called_with(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.assertEqual(2, socket_mock.call_count)
         self.assertEqual(socket_mock.return_value, sock.ins)
-        sock.ins.connect.assert_called_once_with(sock.server_addr)
+        sock.ins.connect.assert_called_with(sock.server_addr)
         # os.path.exists is mocked to return True two times => count is 2
-        sock.ins.bind.assert_called_once_with(
-            os.path.join("/tmp", "{}.2".format(scapy_conf_type))
-        )
-        exp_req = {"op": "init", "type": scapy_conf_type}
+        sockname = os.path.join("/tmp", "{}.2".format(scapy_conf_type))
+        sock.ins.bind.assert_called_once_with(sockname)
+        exp_req = {"op": "init", "ins": sockname,
+                   "type": scapy_conf_type}
         if len(args) > 0:
             exp_req["args"] = args
         sock.ins.send.assert_called_once_with(
@@ -123,6 +126,14 @@ class TestSocketInit(TestSocketBase):
                          '"globgrod"}}}}'.format(scapy_unroot.daemon.OS)
             self._test_init(socket_mock, "xfogxcno", error_code)
 
+    def test_init__os_error_eperm(self, socket_mock):
+        with self.assertRaisesRegex(OSError, r"^\[Errno {}\]\s*$"
+                                    .format(errno.EPERM)):
+            error_code = '{{"error":{{"type": {},"errno":{}}}}}' \
+                         .format(scapy_unroot.daemon.OS, errno.EPERM)
+            self._test_init(socket_mock, "xfogxcno", error_code)
+            socket_mock.close.assert_called()
+
     def test_init__os_error_no_msg(self, socket_mock):
         with self.assertRaisesRegex(OSError, r"^\[Errno 243\]\s*$"):
             error_code = '{{"error":{{"type": {},"errno":243}}}}' \
@@ -169,12 +180,14 @@ class TestSocketClose(TestSocketBase):
         sock.ins.send.assert_called_with(
             json.dumps(exp_req, separators=(",", ":")).encode()
         )
-        sock.ins.close.assert_called_once()
+        sock.ins.close.assert_called()
+        sock.command_socket.close.assert_called()
         return sock
 
     def test_close__success(self, socket_mock):
         sock = self._test_close_success(socket_mock, "L2socket")
-        sock.outs.close.assert_called_once()
+        sock.ins.close.assert_called()
+        sock.command_socket.close.assert_called()
 
     def test_close__success_listen_socket(self, socket_mock):
         sock = self._test_close_success(socket_mock, "L2listen")
@@ -193,8 +206,8 @@ class TestSocketClose(TestSocketBase):
         self.assertIn("WARNING:scapy_unroot.sockets:Exception on sending "
                       "close to daemon ''",
                       cm.output)
-        sock.ins.close.assert_called_once()
-        sock.outs.close.assert_called_once()
+        sock.ins.close.assert_called()
+        sock.outs.close.assert_called()
 
 
 class TestWithSocketInitialized(TestSocketBase):
@@ -341,6 +354,7 @@ class TestSocketSelect(TestSocketBase):
 class TestConfigureSockets(unittest.TestCase):
     def test_configure_sockets(self, socket_mock, *args, **kwargs):
         socket_mock.return_value.recv = lambda x: '{"success":0}'
+        socket_mock.return_value.getsockname = lambda: "/tmp/blafoo"
         scapy_unroot.sockets.configure_sockets()
         self.assertEqual("L2listen", conf.L2listen().scapy_conf_type)
         self.assertEqual("L2socket", conf.L2socket().scapy_conf_type)
@@ -349,8 +363,10 @@ class TestConfigureSockets(unittest.TestCase):
 
     def test_configure_sockets_with_params(self, socket_mock, *args, **kwargs):
         socket_mock.return_value.recv = lambda x: '{"success":0}'
+        socket_mock.return_value.getsockname = lambda: "/tmp/blafoo"
         scapy_unroot.sockets.configure_sockets("foobar", "/tmp", 34.874)
         res = conf.L3socket6()
         self.assertEqual("L3socket6", res.scapy_conf_type)
+        self.assertEqual("/tmp", res.socket_dir)
         self.assertEqual("foobar", res.server_addr)
         self.assertEqual(34.874, res.connection_timeout)

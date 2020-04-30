@@ -17,10 +17,12 @@ import os
 import shutil
 import socket
 import tempfile
+import sys
+import time
 import threading
 import unittest
 
-from scapy.all import conf, raw, send, sendp, sr1, srp1, \
+from scapy.all import conf, raw, send, sendp, sr1, srp1, AsyncSniffer, \
                       Ether, ICMPv6EchoRequest, ICMPv6EchoReply, IPv6, UDP
 
 from scapy_unroot import configure_sockets
@@ -57,6 +59,8 @@ class MockLoggingHandler(logging.Handler):
 
 
 class TestScapyInteraction(unittest.TestCase):
+    print_server_log = False
+
     @classmethod
     def setUpClass(cls):
         cls.run_dir = tempfile.TemporaryDirectory(
@@ -85,6 +89,8 @@ class TestScapyInteraction(unittest.TestCase):
             ),
             timeout=TEST_TIMEOUT
         )
+        if self.print_server_log:
+            self.spawn.logfile = sys.stdout
         self.spawn.expect(
             r"Starting server for group .+ on run_dir (.+)\s"
         )
@@ -167,3 +173,43 @@ class TestScapyInteraction(unittest.TestCase):
             IPv6(src="fe80::2", dst="fe80::1") / \
             ICMPv6EchoReply()
         self._test_sndrcv1(srp1, "L2socket", send_data, exp_reply)
+
+    def test_scapy_sniffer(self):
+        send_data = [
+            Ether(src="99:54:8f:91:12:f6", dst="44:35:a2:a6:d0:bd") /
+            IPv6(src="fe80::1", dst="fe80::2") /
+            ICMPv6EchoRequest(),
+            Ether(src="44:35:a2:a6:d0:bd", dst="99:54:8f:91:12:f6") /
+            IPv6(src="fe80::2", dst="fe80::1") /
+            ICMPv6EchoReply(),
+            Ether(src="1f:db:ed:9c:26:6e", dst="18:39:3c:e8:1f:ad") /
+            IPv6(src="2001:db8:8a5a:4020:f160:162:c83d:527d",
+                 dst="2001:db8:2932:29c9:35eb:9377:ae68:634d") /
+            UDP(sport=31245, dport=8788) / b"abcdef",
+            Ether(src="18:39:3c:e8:1f:ad", dst="1f:db:ed:9c:26:6e") /
+            IPv6(src="2001:db8:2932:29c9:35eb:9377:ae68:634d",
+                 dst="2001:db8:8a5a:4020:f160:162:c83d:527d") /
+            UDP(sport=8788, dport=31245) / b"12345",
+        ]
+        sniffer = AsyncSniffer()
+        sniffer.start()
+        self.spawn.expect(
+            r"Initializing L2listen with arguments"
+        )
+        self.spawn.expect(
+            r"Bound socket to '(.*)'\s"
+        )
+        remote = self.spawn.match.group(1)
+        # wait a bit to avoid race where socket is not bound yet
+        time.sleep(.5)
+        for packet in send_data:
+            time.sleep(.001)        # some spacing for test stability
+            self.assertEqual(len(raw(packet)),
+                             self.comm_sock.sendto(raw(packet), remote))
+        for packet in send_data:
+            self.spawn.expect(r"Receiving on L2listen with arguments")
+        results = sniffer.stop()
+        self.assertIsNotNone(results)
+        self.assertEqual(len(send_data), len(results))
+        for pkt in send_data:
+            self.assertIn(Ether(raw(pkt)), results)

@@ -242,6 +242,12 @@ class UnrootDaemon:
         self.remove_client(client)
         client.close()
 
+    def get_client_by_address(self, client_address):
+        for client_sock in self.clients:
+            client = self.clients[client_sock]
+            if client.address == client_address:
+                return client
+
     def watch_socket(self, socket, mapping=None):
         self.read_sockets[socket] = mapping
 

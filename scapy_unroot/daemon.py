@@ -205,9 +205,9 @@ class UnrootDaemon:
                             json.dumps(res, separators=(",", ":")).encode()
                         )
                         if _is_closed_resp(res):
-                            self.remove_client(client)
+                            self.close_client(client)
                     except ConnectionError:
-                        self.remove_client(client)
+                        self.close_client(client)
                 else:
                     client = self.read_sockets.get(sock)
                     if isinstance(client, UnrootDaemonClient):
@@ -226,13 +226,12 @@ class UnrootDaemon:
                                 else ts,
                             }}, separators=(",", ":")).encode())
                         except ConnectionError:
-                            self.clients.pop(client.socket, None)
-                            client.close()
+                            self.close_client(client)
                     else:
                         self.logger.error("Unexpected socket selected {}"
                                           .format(sock))
 
-    def remove_client(self, client):
+    def close_client(self, client):
         self.clients.pop(client.socket, None)
         client.close()
 

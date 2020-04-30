@@ -220,7 +220,7 @@ class UnrootDaemon:
                             self.logger.info(
                                 "Sending {}({}) (ts={}) to {}"
                                 .format(ll.__name__, data_raw,
-                                        ts, client.socket.getpeername())
+                                        ts, client.ins.getpeername())
                             )
                             data = base64.b64encode(data_raw)
                             client.ins.send(json.dumps({"recv": {

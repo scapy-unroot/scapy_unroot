@@ -14,6 +14,7 @@ permissions.
 
 import atexit
 import base64
+import errno
 import fcntl
 import functools
 import json
@@ -42,18 +43,22 @@ class ScapyUnrootSocket(SuperSocket):
     _count = 0
     desc = "read/write packets via the scapy_unroot daemon"
 
-    def _op(self, op, op_type=None, data=None, **args):
+    def _op(self, op, op_type=None, data=None, ins=None, **args):
         req = {"op": op}
+        if ins is not None:
+            assert(ins == self.ins.getsockname())
+            req["ins"] = ins
         if op_type is not None:
             req["type"] = op_type
         if data is not None:
             req["data"] = base64.b64encode(data).decode()
         if len(args) > 0:
             req["args"] = args
-        self.ins.settimeout(self.connection_timeout)
-        self.ins.send(json.dumps(req, separators=(",", ":")).encode())
-        resp = json.loads(self.ins.recv(daemon.DAEMON_MTU))
-        self.ins.settimeout(None)
+        self.command_socket.send(
+            json.dumps(req, separators=(",", ":")).encode()
+        )
+        res = self.command_socket.recv(daemon.DAEMON_MTU)
+        resp = json.loads(res)
         if "error" in resp:
             err_type = resp["error"].get("type")
             if err_type in ERR_EXCEPTIONS:
@@ -84,6 +89,7 @@ class ScapyUnrootSocket(SuperSocket):
         self.socket_dir = socket_dir
         self.scapy_conf_type = scapy_conf_type
         self.connection_timeout = connection_timeout
+        self.command_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.ins = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         lock = self._acquire_socket_lock()
         path_fmt = os.path.join(self.socket_dir, "{}.{}")
@@ -98,7 +104,15 @@ class ScapyUnrootSocket(SuperSocket):
         else:
             self.outs = self.ins
         self.ins.connect(self.server_addr)
-        self._op("init", op_type=scapy_conf_type, **kwargs)
+        self.command_socket.settimeout(self.connection_timeout)
+        self.command_socket.connect(self.server_addr)
+        try:
+            self._op("init", op_type=scapy_conf_type,
+                     ins=self.ins.getsockname(), **kwargs)
+        except OSError as e:
+            if e.errno == errno.EPERM:
+                self.ins.close()
+            raise
 
     def close(self):
         if self.closed:
@@ -108,6 +122,7 @@ class ScapyUnrootSocket(SuperSocket):
         except Exception as e:
             logger.warning("Exception on sending close to daemon '{}'"
                            .format(e))
+        self.command_socket.close()
         super().close()
 
     def send(self, x):

@@ -223,7 +223,7 @@ class UnrootDaemon:
                                         ts, client.socket.getpeername())
                             )
                             data = base64.b64encode(data_raw)
-                            client.socket.send(json.dumps({"recv": {
+                            client.ins.send(json.dumps({"recv": {
                                 "type": ll.__name__,
                                 "data": data.decode(),
                                 "ts": float(ts) if ts is not None
@@ -261,6 +261,7 @@ class UnrootDaemonClient:
         self.socket = socket
         self.address = address
         self.supersocket = None
+        self.ins = None
 
     def close(self):
         self.daemon.unwatch_socket(self.supersocket)
@@ -270,13 +271,23 @@ class UnrootDaemonClient:
     def is_supersocket_initialized(self):
         return self.supersocket is not None
 
-    def init_supersocket(self, type=None, args=None):
+    def init_supersocket(self, type=None, ins=None, args=None):
         if type in ["L2listen", "L2socket", "L3socket", "L3socket6"]:
             if args is None:
                 args = {}
             iface = args.get("iface", conf.iface)
             if iface in self.daemon.iface_blacklist:
                 return _os_error_resp(errno.EPERM)
+            enotconn = _os_error_resp(errno.ENOTCONN)
+            if ins is None:
+                return enotconn
+            ins_client = self.daemon.get_client_by_address(ins)
+            if ins_client is None:
+                return enotconn
+            # don't manage ins socket in daemon anymore, client class is now
+            # responsible
+            self.daemon.remove_client(ins_client)
+            self.ins = ins_client.socket
             try:
                 supersocket = getattr(conf, type)(**args)
             except TypeError as e:

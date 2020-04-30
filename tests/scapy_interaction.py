@@ -27,7 +27,7 @@ from scapy_unroot import configure_sockets
 from scapy_unroot.sockets import logger
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-TEST_TIMEOUT = 1
+TEST_TIMEOUT = 5
 
 
 class MockLoggingHandler(logging.Handler):

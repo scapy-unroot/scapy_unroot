@@ -9,7 +9,7 @@
 # details.
 
 """
-Server for the interaction tests.
+Server script for the interaction tests. Run by scapy interaction test.
 """
 
 import argparse
@@ -96,7 +96,7 @@ def main():
     args = parser.parse_args()
 
     # get group name for current user
-    group = grp.getgrgid(pwd.getpwuid(os.getuid())[2])[0]
+    group = grp.getgrgid(pwd.getpwuid(os.getuid())[3])[0]
 
     with tempfile.TemporaryDirectory(prefix="scapy_unroot.tests.") as run_dir:
         for socket_conf in ["L2listen", "L2socket", "L3socket", "L3socket6"]:

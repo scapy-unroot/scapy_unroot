@@ -231,8 +231,11 @@ class UnrootDaemon:
                         self.logger.error("Unexpected socket selected {}"
                                           .format(sock))
 
-    def close_client(self, client):
+    def remove_client(self, client):
         self.clients.pop(client.socket, None)
+
+    def close_client(self, client):
+        self.remove_client(client)
         client.close()
 
     def watch_socket(self, socket, mapping=None):

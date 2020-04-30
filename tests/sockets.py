@@ -13,6 +13,7 @@ without root.
 """
 
 import base64
+import errno
 import json
 import os
 import socket

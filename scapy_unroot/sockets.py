@@ -168,7 +168,7 @@ class ScapyUnrootSocket(SuperSocket):
 
 
 def configure_sockets(server_addr=None, socket_dir=None,
-                      connection_timeout=0.1):
+                      connection_timeout=0.5):
     if server_addr is None:
         server_addr = os.path.join(daemon.RUN_DIR_DEFAULT, "server-socket")
     if socket_dir is None:

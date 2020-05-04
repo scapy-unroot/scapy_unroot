@@ -14,12 +14,12 @@ import sys
 
 
 name = "scapy_unroot"
-version = "0.3.0b3"
+version = "0.3.0b4"
 description = "Daemon and tooling to enable using scapy without " \
               "root permissions."
 author = "Martine S. Lenders"
 author_email = "m.lenders@fu-berlin.de"
-url = "https://github.com/scapy-unroot/scapy-unroot"
+url = "https://github.com/scapy-unroot/scapy_unroot"
 
 
 def with_directory(filename):

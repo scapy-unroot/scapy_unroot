@@ -19,7 +19,7 @@ description = "Daemon and tooling to enable using scapy without " \
               "root permissions."
 author = "Martine S. Lenders"
 author_email = "m.lenders@fu-berlin.de"
-url = "https://github.com/miri64/scapy-unroot"
+url = "https://github.com/scapy-unroot/scapy-unroot"
 
 
 def with_directory(filename):
